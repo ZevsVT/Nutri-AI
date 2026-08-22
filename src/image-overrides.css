@@ -1,0 +1,16 @@
+.diversity-emoji {
+  overflow: hidden;
+  font-size: 0;
+}
+
+.diversity-emoji img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.review-photo--uploaded,
+.result-photo--uploaded {
+  background-position: center;
+}
