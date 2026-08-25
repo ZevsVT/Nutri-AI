@@ -6,6 +6,7 @@ import { installSignalHandlers } from "./app/shutdown.js";
 import { loadConfig } from "./config/env.js";
 import { createPrismaDatabase } from "./integrations/database/prisma-database.js";
 import { PrismaAuthRepository } from "./modules/auth/auth.repository.js";
+import { PrismaBusinessApiService } from "./modules/api/api.service.js";
 
 dotenv.config({ path: resolve(process.cwd(), ".env") });
 
@@ -21,6 +22,9 @@ try {
     config,
     authRepository: database
       ? new PrismaAuthRepository(database.client)
+      : undefined,
+    businessApiService: database
+      ? new PrismaBusinessApiService(database.client)
       : undefined,
     readinessChecks: database
       ? [{ name: "database", check: () => database.ping() }]

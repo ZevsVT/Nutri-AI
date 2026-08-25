@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { API_PREFIX } from "../config/constants.js";
 import {
   createAuthenticate,
@@ -6,6 +6,7 @@ import {
 } from "../common/middleware/auth.js";
 import { validateRequest } from "../common/middleware/request-validation.js";
 import type { SystemController } from "../modules/system/system.controller.js";
+import type { ApiController } from "../modules/api/api.controller.js";
 import { AuthController } from "../modules/auth/auth.controller.js";
 import {
   loginSchema,
@@ -17,6 +18,23 @@ import {
   apiMetadataQuerySchema,
   echoBodySchema,
 } from "../modules/system/system.schemas.js";
+import {
+  barcodeSchema,
+  chatSchema,
+  confirmAnalysisSchema,
+  createAnalysisSchema,
+  createMealSchema,
+  dailyNutritionSchema,
+  foodSearchSchema,
+  idParamsSchema,
+  insightsSchema,
+  listMealsSchema,
+  recipesSchema,
+  updateMealSchema,
+  waterListSchema,
+  waterSchema,
+  weeklyNutritionSchema,
+} from "../modules/api/api.schemas.js";
 
 const apiMetadataQueryJsonSchema = {
   type: "object",
@@ -42,6 +60,7 @@ const errorResponseJsonSchema = { $ref: "ErrorResponse#" };
 export async function registerRoutes(
   app: FastifyInstance,
   controller: SystemController,
+  apiController?: ApiController,
 ): Promise<void> {
   app.get(
     "/health",
@@ -180,4 +199,32 @@ export async function registerRoutes(
     },
     controller.adminCheck,
   );
+
+  if (!apiController) return;
+
+  const privateRoute = { preHandler: authenticate };
+  const validate = (target: "body" | "query" | "params", schema: Parameters<typeof validateRequest>[1]) => ({ preValidation: validateRequest(target, schema) });
+  const handler = (value: unknown) => value as RouteHandlerMethod;
+
+  app.get(`${API_PREFIX}/foods/search`, { ...validate("query", foodSearchSchema) }, handler(apiController.searchFoods));
+  app.get(`${API_PREFIX}/foods/:id`, { ...validate("params", idParamsSchema) }, handler(apiController.getFood));
+
+  app.post(`${API_PREFIX}/meals`, { ...privateRoute, ...validate("body", createMealSchema) }, handler(apiController.createMeal));
+  app.get(`${API_PREFIX}/meals`, { ...privateRoute, ...validate("query", listMealsSchema) }, handler(apiController.listMeals));
+  app.get(`${API_PREFIX}/meals/:id`, { ...privateRoute, ...validate("params", idParamsSchema) }, handler(apiController.getMeal));
+  app.patch(`${API_PREFIX}/meals/:id`, { ...privateRoute, ...validate("params", idParamsSchema), ...validate("body", updateMealSchema) }, handler(apiController.updateMeal));
+  app.delete(`${API_PREFIX}/meals/:id`, { ...privateRoute, ...validate("params", idParamsSchema) }, handler(apiController.deleteMeal));
+
+  app.post(`${API_PREFIX}/meal-analysis`, { ...privateRoute, ...validate("body", createAnalysisSchema) }, handler(apiController.createAnalysis));
+  app.get(`${API_PREFIX}/meal-analysis/:id`, { ...privateRoute, ...validate("params", idParamsSchema) }, handler(apiController.getAnalysis));
+  app.post(`${API_PREFIX}/meal-analysis/:id/confirm`, { ...privateRoute, ...validate("params", idParamsSchema), ...validate("body", confirmAnalysisSchema) }, handler(apiController.confirmAnalysis));
+
+  app.get(`${API_PREFIX}/nutrition/daily`, { ...privateRoute, ...validate("query", dailyNutritionSchema) }, handler(apiController.dailyNutrition));
+  app.get(`${API_PREFIX}/nutrition/weekly`, { ...privateRoute, ...validate("query", weeklyNutritionSchema) }, handler(apiController.weeklyNutrition));
+  app.post(`${API_PREFIX}/ai/chat`, { ...privateRoute, ...validate("body", chatSchema) }, handler(apiController.chat));
+  app.get(`${API_PREFIX}/recipes`, { ...validate("query", recipesSchema) }, handler(apiController.listRecipes));
+  app.post(`${API_PREFIX}/water`, { ...privateRoute, ...validate("body", waterSchema) }, handler(apiController.createWater));
+  app.get(`${API_PREFIX}/water`, { ...privateRoute, ...validate("query", waterListSchema) }, handler(apiController.listWater));
+  app.get(`${API_PREFIX}/insights`, { ...privateRoute, ...validate("query", insightsSchema) }, handler(apiController.listInsights));
+  app.post(`${API_PREFIX}/barcode/scan`, { ...privateRoute, ...validate("body", barcodeSchema) }, handler(apiController.scanBarcode));
 }
