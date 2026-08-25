@@ -1,6 +1,11 @@
 # Nutri-AI backend
 
-This directory establishes Issue #6's production backend foundation for Nutri-AI. It provides a versioned Fastify REST API, security and operational middleware, typed error and response contracts, health/readiness checks, and replaceable provider/repository ports. Meal, food, nutrition, AI, authentication flows, storage, billing, and persistence remain intentionally unimplemented for later issues.
+This directory contains the production backend foundation from Issue #6 and
+the PostgreSQL + Prisma persistence foundation from Issue #7. It provides a
+versioned Fastify REST API, security and operational middleware, typed error and
+response contracts, health/readiness checks, Prisma migrations/seeds, and
+focused data-access repositories. Product HTTP routes, full authentication,
+storage, billing, and provider integrations remain subsequent issues.
 
 ## Local setup
 
@@ -13,7 +18,8 @@ npm run dev
 
 On Windows PowerShell, use `Copy-Item .env.example .env`. If PostgreSQL is
 enabled, replace the local password placeholder and set `DATABASE_URL` to the
-same credentials before starting the API.
+same credentials before starting the API. Apply the schema with
+`npm run db:migrate` and load development data with `npm run db:seed`.
 
 The API listens on `http://localhost:4000` by default. The frontend remains at `http://localhost:5173`; add its origin to `CORS_ORIGINS` when using a different frontend URL. Server secrets stay in the backend environment and are never exposed to the frontend.
 
@@ -24,7 +30,7 @@ The API listens on `http://localhost:4000` by default. The frontend remains at `
 | `NODE_ENV`                                | `development`, `staging`, or `production`.                                                             |
 | `PORT`                                    | HTTP port; defaults to `4000`.                                                                         |
 | `API_BASE_URL`                            | Base URL used in OpenAPI metadata; staging and production require HTTPS.                               |
-| `DATABASE_URL`                            | PostgreSQL connection string used by the backend readiness check.                                      |
+| `DATABASE_URL`                            | PostgreSQL connection string used by Prisma, migrations, seed, and readiness checks.                   |
 | `POSTGRES_DB`, `POSTGRES_USER`            | Local PostgreSQL database and role names.                                                              |
 | `POSTGRES_PASSWORD`, `POSTGRES_PORT`      | Local PostgreSQL credentials and host port.                                                            |
 | `JWT_SECRET`, `JWT_EXPIRES_IN`            | Authentication configuration reserved for Issue #8. A strong secret is required in staging/production. |
@@ -55,6 +61,10 @@ npm run lint
 npm run typecheck
 npm run format:check
 npm run audit
+npm run db:validate
+npm run db:generate
+npm run db:migrate
+npm run db:seed
 ```
 
 ## API contract
@@ -98,7 +108,7 @@ The AI, nutrition, storage, session-token, and repository interfaces in `src/int
 
 Authentication is deliberately a foundation only. In development, `AUTH_DEV_MODE=true` enables test-only `X-Development-User-*` headers. Production does not accept those headers and has no fake authentication. Issue #8 can connect a secure session or access/refresh-token implementation through `SessionTokenProvider` and the authentication middleware. Authorization uses server-side roles and permissions and already includes `USER`, `ADMIN`, `MODERATOR`, `NUTRITION_EDITOR`, and `SUPPORT` role types.
 
-Readiness starts with application initialization and accepts injected dependency checks. When `DATABASE_URL` is configured, the backend creates a PostgreSQL connection pool and `/ready` verifies it with `SELECT 1`. Shutdown handles `SIGTERM` and `SIGINT`, closes Fastify first, then closes the database pool within a bounded timeout. Domain tables and migrations remain intentionally deferred until the data model is agreed.
+Readiness starts with application initialization and accepts injected dependency checks. When `DATABASE_URL` is configured, the backend creates one shared Prisma client and `/ready` verifies it with `SELECT 1`. Shutdown handles `SIGTERM` and `SIGINT`, closes Fastify first, then disconnects Prisma within a bounded timeout. Domain tables, migrations, seed data, and focused repositories live under `prisma/` and `src/modules/`.
 
 The global rate limiter currently uses Fastify's in-memory store. This is
 appropriate for local development and a single API instance; before deploying
@@ -120,4 +130,4 @@ The image uses a multi-stage build, installs only production dependencies in the
 
 Inputs are validated before controllers run. CORS uses a configured allowlist, headers are hardened with Helmet, request and multipart payloads are bounded, and rate limiting is global by default. Logs intentionally exclude request bodies, credentials, tokens, API keys, and image bytes. Error responses never include provider exceptions or stack traces.
 
-PostgreSQL/Prisma schema and migrations, full authentication, production image storage, nutrition/food data, meal CRUD, AI recognition/chat, subscriptions, dashboards, and CI/CD are intentionally deferred to their respective issues. `npm run audit` checks all locked dependencies; if the registry audit service is unavailable, the command is reported as not verified rather than treated as a clean result.
+Full authentication, production image storage, meal CRUD HTTP routes, AI recognition/chat providers, subscriptions, dashboards, and CI/CD remain intentionally deferred to their respective issues. See [`docs/database.md`](../docs/database.md) for the database design and workflow. `npm run audit` checks all locked dependencies; if the registry audit service is unavailable, the command is reported as not verified rather than treated as a clean result.

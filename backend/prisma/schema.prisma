@@ -1,0 +1,498 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+  NUTRITION_EDITOR
+  SUPPORT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ConsentType {
+  PRIVACY_POLICY
+  TERMS
+  AI_PROCESSING
+  ANALYTICS
+  MARKETING
+  HEALTH_DATA
+}
+
+enum ConsentStatus {
+  GRANTED
+  REVOKED
+}
+
+enum FoodSourceType {
+  CURATED
+  GOVERNMENT
+  RESEARCH
+  PROVIDER
+  USER_SUBMITTED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  OTHER
+}
+
+enum MealStatus {
+  DRAFT
+  ANALYZING
+  REVIEW
+  CONFIRMED
+  FAILED
+  DELETED
+}
+
+enum NutritionAnalysisStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum AIAnalysisStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AIInputType {
+  IMAGE
+  TEXT
+  BARCODE
+  MANUAL
+}
+
+enum AICorrectionType {
+  FOOD_REPLACED
+  FOOD_REMOVED
+  FOOD_ADDED
+  PORTION_CHANGED
+  NAME_CORRECTED
+}
+
+enum RecipeDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum RecipeStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum InsightSeverity {
+  INFO
+  POSITIVE
+  WARNING
+}
+
+model User {
+  id          String     @id @default(uuid()) @db.Uuid
+  email       String     @unique @db.VarChar(320)
+  name        String?    @db.VarChar(120)
+  avatarUrl   String?    @db.Text
+  role        UserRole   @default(USER)
+  status      UserStatus @default(ACTIVE)
+  lastLoginAt DateTime?  @db.Timestamptz(3)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+
+  preference    UserPreference?
+  consents      UserConsent[]
+  meals         Meal[]
+  aiAnalyses    AIAnalysis[]
+  aiCorrections AICorrection[]
+  waterLogs     WaterLog[]
+  insights      NutritionInsight[]
+
+  @@index([status])
+}
+
+model UserPreference {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @db.Uuid
+  language          String   @default("vi") @db.VarChar(10)
+  timezone          String   @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  dietaryPreference String?  @db.VarChar(120)
+  activityContext   String?  @db.VarChar(120)
+  foodPreferences   String[] @default([])
+  foodExclusions    String[] @default([])
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserConsent {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @db.Uuid
+  consentType ConsentType
+  version     String        @db.VarChar(64)
+  status      ConsentStatus
+  grantedAt   DateTime?     @db.Timestamptz(3)
+  revokedAt   DateTime?     @db.Timestamptz(3)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, consentType, createdAt])
+}
+
+model Food {
+  id            String   @id @default(uuid()) @db.Uuid
+  canonicalName String   @unique @db.VarChar(160)
+  nameVi        String   @db.VarChar(160)
+  nameEn        String?  @db.VarChar(160)
+  description   String?  @db.Text
+  category      String?  @db.VarChar(100)
+  cuisine       String?  @db.VarChar(100)
+  foodType      String?  @db.VarChar(100)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  aliases              FoodAlias[]
+  nutritionRecords     FoodNutrition[]
+  mealItems            MealItem[]
+  predictions          AIFoodPrediction[]
+  recipeIngredients    RecipeIngredient[]
+  originalCorrections  AICorrection[]     @relation("AICorrectionOriginalFood")
+  correctedCorrections AICorrection[]     @relation("AICorrectionCorrectedFood")
+
+  @@index([nameVi])
+  @@index([isActive])
+}
+
+model FoodAlias {
+  id              String   @id @default(uuid()) @db.Uuid
+  foodId          String   @db.Uuid
+  alias           String   @db.VarChar(200)
+  normalizedAlias String   @db.VarChar(200)
+  language        String   @default("vi") @db.VarChar(10)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  food Food @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@unique([normalizedAlias, language])
+  @@index([foodId])
+}
+
+model FoodSource {
+  id              String         @id @default(uuid()) @db.Uuid
+  name            String         @db.VarChar(160)
+  provider        String         @db.VarChar(120)
+  sourceType      FoodSourceType
+  sourceUrl       String?        @db.Text
+  sourceReference String?        @db.VarChar(240)
+  license         String?        @db.VarChar(160)
+  metadata        Json?
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+
+  nutritionVersions NutritionVersion[]
+  mealItemSnapshots MealItemNutrition[] @relation("MealItemNutritionSource")
+
+  @@unique([provider, name])
+  @@index([provider])
+}
+
+model NutritionVersion {
+  id            String    @id @default(uuid()) @db.Uuid
+  sourceId      String    @db.Uuid
+  version       String    @db.VarChar(80)
+  effectiveFrom DateTime  @db.Timestamptz(3)
+  effectiveTo   DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  source            FoodSource          @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  foodNutrition     FoodNutrition[]
+  mealItemSnapshots MealItemNutrition[] @relation("MealItemNutritionVersion")
+
+  @@unique([sourceId, version])
+  @@unique([id, sourceId])
+  @@index([sourceId, effectiveFrom])
+}
+
+model FoodNutrition {
+  id                 String   @id @default(uuid()) @db.Uuid
+  foodId             String   @db.Uuid
+  nutritionVersionId String   @db.Uuid
+  servingAmount      Decimal  @db.Decimal(12, 3)
+  servingUnit        String   @db.VarChar(32)
+  calories           Decimal  @db.Decimal(12, 2)
+  protein            Decimal  @db.Decimal(12, 3)
+  carbohydrates      Decimal  @db.Decimal(12, 3)
+  fat                Decimal  @db.Decimal(12, 3)
+  fiber              Decimal  @db.Decimal(12, 3)
+  sugar              Decimal  @db.Decimal(12, 3)
+  sodium             Decimal  @db.Decimal(12, 3)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  food             Food             @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  nutritionVersion NutritionVersion @relation(fields: [nutritionVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([foodId, nutritionVersionId])
+  @@index([nutritionVersionId])
+}
+
+model Meal {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String     @db.Uuid
+  mealType    MealType
+  name        String     @default("Untitled meal") @db.VarChar(160)
+  capturedAt  DateTime   @db.Timestamptz(3)
+  confirmedAt DateTime?  @db.Timestamptz(3)
+  status      MealStatus @default(DRAFT)
+  notes       String?    @db.Text
+  imageUrl    String?    @db.Text
+  deletedAt   DateTime?  @db.Timestamptz(3)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items      MealItem[]
+  nutrition  NutritionAnalysis?
+  aiAnalyses AIAnalysis[]
+
+  @@index([userId, capturedAt])
+  @@index([userId, status])
+}
+
+model MealItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  mealId      String   @db.Uuid
+  foodId      String?  @db.Uuid
+  quantity    Decimal  @db.Decimal(12, 3)
+  unit        String   @db.VarChar(32)
+  displayName String   @db.VarChar(160)
+  confidence  Decimal? @db.Decimal(4, 3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  meal              Meal               @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  food              Food?              @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  nutritionSnapshot MealItemNutrition?
+
+  @@index([mealId])
+  @@index([foodId])
+}
+
+model MealItemNutrition {
+  id                 String   @id @default(uuid()) @db.Uuid
+  mealItemId         String   @unique @db.Uuid
+  nutritionVersionId String   @db.Uuid
+  sourceId           String   @db.Uuid
+  servingAmount      Decimal  @db.Decimal(12, 3)
+  servingUnit        String   @db.VarChar(32)
+  calories           Decimal  @db.Decimal(12, 2)
+  protein            Decimal  @db.Decimal(12, 3)
+  carbohydrates      Decimal  @db.Decimal(12, 3)
+  fat                Decimal  @db.Decimal(12, 3)
+  fiber              Decimal  @db.Decimal(12, 3)
+  sugar              Decimal  @db.Decimal(12, 3)
+  sodium             Decimal  @db.Decimal(12, 3)
+  estimated          Boolean  @default(true)
+  confidence         Decimal? @db.Decimal(4, 3)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+
+  mealItem         MealItem         @relation(fields: [mealItemId], references: [id], onDelete: Cascade)
+  nutritionVersion NutritionVersion @relation("MealItemNutritionVersion", fields: [nutritionVersionId, sourceId], references: [id, sourceId], onDelete: Restrict)
+  source           FoodSource       @relation("MealItemNutritionSource", fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@index([nutritionVersionId])
+  @@index([sourceId])
+}
+
+model NutritionAnalysis {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  mealId             String                  @unique @db.Uuid
+  status             NutritionAnalysisStatus @default(PENDING)
+  totalCalories      Decimal?                @db.Decimal(12, 2)
+  totalProtein       Decimal?                @db.Decimal(12, 3)
+  totalCarbohydrates Decimal?                @db.Decimal(12, 3)
+  totalFat           Decimal?                @db.Decimal(12, 3)
+  totalFiber         Decimal?                @db.Decimal(12, 3)
+  confidence         Decimal?                @db.Decimal(4, 3)
+  method             String?                 @db.VarChar(80)
+  version            String?                 @db.VarChar(80)
+  explanation        String?                 @db.Text
+  createdAt          DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @db.Timestamptz(3)
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+}
+
+model AIAnalysis {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @db.Uuid
+  mealId         String           @db.Uuid
+  provider       String           @db.VarChar(80)
+  model          String           @db.VarChar(120)
+  modelVersion   String?          @db.VarChar(80)
+  status         AIAnalysisStatus @default(PENDING)
+  inputType      AIInputType
+  inputReference String?          @db.Text
+  confidence     Decimal?         @db.Decimal(4, 3)
+  startedAt      DateTime?        @db.Timestamptz(3)
+  completedAt    DateTime?        @db.Timestamptz(3)
+  errorCode      String?          @db.VarChar(80)
+  errorMessage   String?          @db.Text
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meal        Meal               @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  predictions AIFoodPrediction[]
+  corrections AICorrection[]
+
+  @@index([userId])
+  @@index([mealId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AIFoodPrediction {
+  id                String   @id @default(uuid()) @db.Uuid
+  analysisId        String   @db.Uuid
+  foodId            String?  @db.Uuid
+  predictedName     String   @db.VarChar(160)
+  confidence        Decimal? @db.Decimal(4, 3)
+  estimatedQuantity Decimal? @db.Decimal(12, 3)
+  estimatedUnit     String?  @db.VarChar(32)
+  modelMetadata     Json?
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  analysis    AIAnalysis     @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  food        Food?          @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  corrections AICorrection[]
+
+  @@index([analysisId])
+  @@index([foodId])
+}
+
+model AICorrection {
+  id                String           @id @default(uuid()) @db.Uuid
+  analysisId        String           @db.Uuid
+  predictionId      String?          @db.Uuid
+  userId            String           @db.Uuid
+  correctionType    AICorrectionType
+  originalFoodId    String?          @db.Uuid
+  correctedFoodId   String?          @db.Uuid
+  originalQuantity  Decimal?         @db.Decimal(12, 3)
+  correctedQuantity Decimal?         @db.Decimal(12, 3)
+  originalUnit      String?          @db.VarChar(32)
+  correctedUnit     String?          @db.VarChar(32)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+
+  analysis      AIAnalysis        @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  prediction    AIFoodPrediction? @relation(fields: [predictionId], references: [id], onDelete: SetNull)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalFood  Food?             @relation("AICorrectionOriginalFood", fields: [originalFoodId], references: [id], onDelete: Restrict)
+  correctedFood Food?             @relation("AICorrectionCorrectedFood", fields: [correctedFoodId], references: [id], onDelete: Restrict)
+
+  @@index([analysisId])
+  @@index([userId, createdAt])
+}
+
+model Recipe {
+  id          String           @id @default(uuid()) @db.Uuid
+  nameVi      String           @db.VarChar(160)
+  nameEn      String?          @db.VarChar(160)
+  description String?          @db.Text
+  servings    Int              @default(1)
+  prepTime    Int?
+  cookTime    Int?
+  difficulty  RecipeDifficulty @default(EASY)
+  status      RecipeStatus     @default(DRAFT)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+
+  ingredients RecipeIngredient[]
+  nutrition   RecipeNutrition?
+
+  @@index([status])
+}
+
+model RecipeIngredient {
+  id       String  @id @default(uuid()) @db.Uuid
+  recipeId String  @db.Uuid
+  foodId   String  @db.Uuid
+  quantity Decimal @db.Decimal(12, 3)
+  unit     String  @db.VarChar(32)
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  food   Food   @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@unique([recipeId, foodId])
+  @@index([foodId])
+}
+
+model RecipeNutrition {
+  id            String   @id @default(uuid()) @db.Uuid
+  recipeId      String   @unique @db.Uuid
+  calories      Decimal  @db.Decimal(12, 2)
+  protein       Decimal  @db.Decimal(12, 3)
+  carbohydrates Decimal  @db.Decimal(12, 3)
+  fat           Decimal  @db.Decimal(12, 3)
+  fiber         Decimal  @db.Decimal(12, 3)
+  sugar         Decimal  @db.Decimal(12, 3)
+  sodium        Decimal  @db.Decimal(12, 3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
+
+model WaterLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  amountMl  Int
+  loggedAt  DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, loggedAt])
+}
+
+model NutritionInsight {
+  id          String          @id @default(uuid()) @db.Uuid
+  userId      String          @db.Uuid
+  periodStart DateTime        @db.Timestamptz(3)
+  periodEnd   DateTime        @db.Timestamptz(3)
+  type        String          @db.VarChar(64)
+  title       String          @db.VarChar(160)
+  summary     String          @db.Text
+  severity    InsightSeverity @default(INFO)
+  confidence  Decimal?        @db.Decimal(4, 3)
+  data        Json?
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime?       @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, periodStart, periodEnd])
+}
