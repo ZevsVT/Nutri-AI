@@ -2,6 +2,8 @@ import type { FastifyRequest } from "fastify";
 import type { AppConfig } from "../../config/env.js";
 import { AppError } from "../errors/app-error.js";
 import type { RequestUser, UserRole } from "../types/request-context.js";
+import type { AuthService } from "../../modules/auth/auth.service.js";
+import { readSessionCookie } from "../../modules/auth/auth.cookies.js";
 import {
   logAuthenticationFailure,
   logAuthorizationFailure,
@@ -38,12 +40,29 @@ function developmentUser(request: FastifyRequest): RequestUser | undefined {
   return { id, role, permissions };
 }
 
-export function createAuthenticate(config: AppConfig) {
+export function createAuthenticate(
+  config: AppConfig,
+  authService?: AuthService,
+) {
   return async function authenticate(request: FastifyRequest): Promise<void> {
     if (config.authDevMode) {
       const user = developmentUser(request);
       if (user) {
         request.user = user;
+        return;
+      }
+    }
+
+    const token = readSessionCookie(request.headers.cookie);
+    if (token && authService) {
+      const resolved = await authService.resolveSession(token);
+      if (resolved) {
+        request.authUser = resolved.user;
+        request.user = {
+          id: resolved.user.id,
+          role: resolved.user.role,
+          permissions: resolved.user.permissions,
+        };
         return;
       }
     }
@@ -59,9 +78,18 @@ export function createAuthenticate(config: AppConfig) {
 
 export function createAuthorize(
   config: AppConfig,
-  ...requiredPermissions: string[]
+  authServiceOrPermission?: AuthService | string,
+  ...permissions: string[]
 ) {
-  const authenticate = createAuthenticate(config);
+  const authService =
+    typeof authServiceOrPermission === "string"
+      ? undefined
+      : authServiceOrPermission;
+  const requiredPermissions =
+    typeof authServiceOrPermission === "string"
+      ? [authServiceOrPermission, ...permissions]
+      : permissions;
+  const authenticate = createAuthenticate(config, authService);
 
   return async function authorize(request: FastifyRequest): Promise<void> {
     if (!request.user) {

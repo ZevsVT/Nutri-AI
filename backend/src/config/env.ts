@@ -53,6 +53,8 @@ const rawEnvironmentSchema = z.object({
     .string()
     .regex(/^\d+(s|m|h|d|w)$/, "JWT_EXPIRES_IN must use a duration such as 15m")
     .default("15m"),
+  AUTH_SESSION_TTL_HOURS: optionalNumber(720, 1, 8_760),
+  PASSWORD_RESET_TTL_MINUTES: optionalNumber(30, 5, 1_440),
   CORS_ORIGINS: z.string().default("http://localhost:5173"),
   STORAGE_PROVIDER: z.string().min(1).default("none"),
   STORAGE_BUCKET: emptyStringAsUndefined,
@@ -85,6 +87,8 @@ export interface AppConfig {
   databaseUrl?: string;
   jwtSecret?: string;
   jwtExpiresIn: string;
+  authSessionTtlHours: number;
+  passwordResetTtlMinutes: number;
   corsOrigins: string[];
   storageProvider: string;
   storageBucket?: string;
@@ -205,6 +209,8 @@ export function loadConfig(
     databaseUrl: parsed.DATABASE_URL,
     jwtSecret: parsed.JWT_SECRET,
     jwtExpiresIn: parsed.JWT_EXPIRES_IN,
+    authSessionTtlHours: parsed.AUTH_SESSION_TTL_HOURS,
+    passwordResetTtlMinutes: parsed.PASSWORD_RESET_TTL_MINUTES,
     corsOrigins,
     storageProvider: parsed.STORAGE_PROVIDER,
     storageBucket: parsed.STORAGE_BUCKET,

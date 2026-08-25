@@ -18,11 +18,22 @@ import "../common/types/request-context.js";
 import { registerRoutes } from "./routes.js";
 import { SystemController } from "../modules/system/system.controller.js";
 import { SystemService } from "../modules/system/system.service.js";
+import { AuthService } from "../modules/auth/auth.service.js";
+import {
+  InMemoryAuthRepository,
+  type AuthRepository,
+} from "../modules/auth/auth.repository.js";
+import {
+  NoopPasswordResetEmailProvider,
+  type PasswordResetEmailProvider,
+} from "../modules/auth/auth.email.js";
 
 export interface BuildAppOptions {
   config: AppConfig;
   readinessChecks?: readonly ReadinessCheck[];
   registerAdditionalRoutes?: (app: FastifyInstance) => Promise<void>;
+  authRepository?: AuthRepository;
+  passwordResetEmailProvider?: PasswordResetEmailProvider;
 }
 
 const requestIdPattern = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -55,6 +66,15 @@ export async function buildApp(
 
   app.decorate("config", config);
   app.decorate("readiness", readiness);
+  app.decorate(
+    "authService",
+    new AuthService(
+      options.authRepository ?? new InMemoryAuthRepository(),
+      config,
+      options.passwordResetEmailProvider ??
+        new NoopPasswordResetEmailProvider(),
+    ),
+  );
   app.decorateRequest("startedAt", 0);
 
   await app.register(helmet, { global: true, contentSecurityPolicy: false });
@@ -160,6 +180,9 @@ export async function buildApp(
                     enum: [
                       "VALIDATION_ERROR",
                       "AUTHENTICATION_ERROR",
+                      "INVALID_CREDENTIALS",
+                      "ACCOUNT_SUSPENDED",
+                      "ACCOUNT_DEACTIVATED",
                       "AUTHORIZATION_ERROR",
                       "NOT_FOUND",
                       "CONFLICT",
@@ -303,6 +326,9 @@ export async function buildApp(
             enum: [
               "VALIDATION_ERROR",
               "AUTHENTICATION_ERROR",
+              "INVALID_CREDENTIALS",
+              "ACCOUNT_SUSPENDED",
+              "ACCOUNT_DEACTIVATED",
               "AUTHORIZATION_ERROR",
               "NOT_FOUND",
               "CONFLICT",
