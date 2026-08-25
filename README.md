@@ -11,6 +11,8 @@ npm run dev
 
 The first version uses local demo data and a simulated AI recognition flow. No API keys are needed. See [`docs/architecture.md`](docs/architecture.md) for the information architecture, schema, API contracts, and production integration boundary.
 
+The production backend foundation lives in [`backend/`](backend/README.md). Run it independently with `cd backend && npm install && npm run dev`.
+
 ## Production integration notes
 
 Add authentication, server-side meal-analysis routes, PostgreSQL/Prisma, storage, and USDA FoodData Central behind the API boundary before using real user data. Keep AI and nutrition-provider keys on the server and retain the source/confidence metadata with every result.

@@ -3,3 +3,8 @@ dist/
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+.env
+.env.*
+!.env.example
+backend/dist/
+backend/.eslintcache
