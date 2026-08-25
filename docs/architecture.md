@@ -75,6 +75,9 @@ repository boundaries are documented in [`docs/database.md`](database.md).
 
 ## API contracts
 
+The implemented versioned contracts, ownership rules, response envelope, and
+error catalogue are documented in [`api.md`](api.md).
+
 All production endpoints are server-side and validate payloads before touching the database. API and AI keys never ship to the browser.
 
 ```text

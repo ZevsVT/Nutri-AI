@@ -27,6 +27,11 @@ import {
   NoopPasswordResetEmailProvider,
   type PasswordResetEmailProvider,
 } from "../modules/auth/auth.email.js";
+import { ApiController } from "../modules/api/api.controller.js";
+import {
+  InMemoryBusinessApiService,
+  type BusinessApiService,
+} from "../modules/api/api.service.js";
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -34,6 +39,7 @@ export interface BuildAppOptions {
   registerAdditionalRoutes?: (app: FastifyInstance) => Promise<void>;
   authRepository?: AuthRepository;
   passwordResetEmailProvider?: PasswordResetEmailProvider;
+  businessApiService?: BusinessApiService;
 }
 
 const requestIdPattern = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -128,6 +134,15 @@ export async function buildApp(
           name: "foundation",
           description: "Non-business foundation contract examples",
         },
+        { name: "foods", description: "Canonical foods and nutrition provenance" },
+        { name: "meals", description: "Owned meal diary and confirmation" },
+        { name: "analysis", description: "Asynchronous meal recognition lifecycle" },
+        { name: "nutrition", description: "Confirmed nutrition summaries" },
+        { name: "assistant", description: "Grounded AI assistant" },
+        { name: "recipes", description: "Published recipes" },
+        { name: "water", description: "User water logs" },
+        { name: "insights", description: "Nutrition insights" },
+        { name: "barcode", description: "Barcode provider contract" },
       ],
       components: {
         securitySchemes: {
@@ -185,7 +200,14 @@ export async function buildApp(
                       "ACCOUNT_DEACTIVATED",
                       "AUTHORIZATION_ERROR",
                       "NOT_FOUND",
+                      "FOOD_NOT_FOUND",
+                      "MEAL_NOT_FOUND",
+                      "ANALYSIS_NOT_FOUND",
                       "CONFLICT",
+                      "INVALID_STATE",
+                      "ANALYSIS_FAILED",
+                      "ANALYSIS_NOT_READY",
+                      "NUTRITION_DATA_UNAVAILABLE",
                       "RATE_LIMITED",
                       "EXTERNAL_SERVICE_ERROR",
                       "AI_ANALYSIS_ERROR",
@@ -331,7 +353,14 @@ export async function buildApp(
               "ACCOUNT_DEACTIVATED",
               "AUTHORIZATION_ERROR",
               "NOT_FOUND",
+              "FOOD_NOT_FOUND",
+              "MEAL_NOT_FOUND",
+              "ANALYSIS_NOT_FOUND",
               "CONFLICT",
+              "INVALID_STATE",
+              "ANALYSIS_FAILED",
+              "ANALYSIS_NOT_READY",
+              "NUTRITION_DATA_UNAVAILABLE",
               "RATE_LIMITED",
               "EXTERNAL_SERVICE_ERROR",
               "AI_ANALYSIS_ERROR",
@@ -378,7 +407,10 @@ export async function buildApp(
 
   installErrorHandling(app);
   const systemService = new SystemService(config, readiness);
-  await registerRoutes(app, new SystemController(systemService));
+  const apiController = new ApiController(
+    options.businessApiService ?? new InMemoryBusinessApiService(),
+  );
+  await registerRoutes(app, new SystemController(systemService), apiController);
   await options.registerAdditionalRoutes?.(app);
   readiness.markInitialized();
 
