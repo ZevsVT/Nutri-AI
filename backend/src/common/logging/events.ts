@@ -6,6 +6,24 @@ interface RequestEventFields {
   route: string;
 }
 
+export type AuthenticationEvent =
+  | "REGISTER_SUCCESS"
+  | "REGISTER_FAILURE"
+  | "LOGIN_SUCCESS"
+  | "LOGIN_FAILURE"
+  | "LOGOUT"
+  | "PASSWORD_RESET_REQUESTED"
+  | "PASSWORD_RESET_COMPLETED";
+
+export function logAuthEvent(
+  logger: FastifyBaseLogger,
+  event: AuthenticationEvent,
+  requestId: string,
+  userId?: string,
+): void {
+  logger.info({ event, requestId, ...(userId ? { userId } : {}) }, event);
+}
+
 export function logAuthenticationFailure(
   logger: FastifyBaseLogger,
   fields: RequestEventFields,

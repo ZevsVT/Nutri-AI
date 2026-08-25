@@ -5,6 +5,7 @@ import { buildApp } from "./app/app.js";
 import { installSignalHandlers } from "./app/shutdown.js";
 import { loadConfig } from "./config/env.js";
 import { createPrismaDatabase } from "./integrations/database/prisma-database.js";
+import { PrismaAuthRepository } from "./modules/auth/auth.repository.js";
 
 dotenv.config({ path: resolve(process.cwd(), ".env") });
 
@@ -18,6 +19,9 @@ let app: FastifyInstance;
 try {
   app = await buildApp({
     config,
+    authRepository: database
+      ? new PrismaAuthRepository(database.client)
+      : undefined,
     readinessChecks: database
       ? [{ name: "database", check: () => database.ping() }]
       : [],

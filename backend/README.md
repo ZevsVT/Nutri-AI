@@ -25,28 +25,30 @@ The API listens on `http://localhost:4000` by default. The frontend remains at `
 
 ## Environment variables
 
-| Variable                                  | Purpose                                                                                                |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `NODE_ENV`                                | `development`, `staging`, or `production`.                                                             |
-| `PORT`                                    | HTTP port; defaults to `4000`.                                                                         |
-| `API_BASE_URL`                            | Base URL used in OpenAPI metadata; staging and production require HTTPS.                               |
-| `DATABASE_URL`                            | PostgreSQL connection string used by Prisma, migrations, seed, and readiness checks.                   |
-| `POSTGRES_DB`, `POSTGRES_USER`            | Local PostgreSQL database and role names.                                                              |
-| `POSTGRES_PASSWORD`, `POSTGRES_PORT`      | Local PostgreSQL credentials and host port.                                                            |
-| `JWT_SECRET`, `JWT_EXPIRES_IN`            | Authentication configuration reserved for Issue #8. A strong secret is required in staging/production. |
-| `CORS_ORIGINS`                            | Comma-separated allowlist. Wildcard CORS is rejected in production.                                    |
-| `STORAGE_PROVIDER`, `STORAGE_BUCKET`      | Future storage provider configuration.                                                                 |
-| `AI_PROVIDER`, `AI_API_KEY`               | Future AI provider configuration. A key is required when a provider is selected.                       |
-| `NUTRITION_PROVIDER`, `NUTRITION_API_KEY` | Future nutrition provider configuration.                                                               |
-| `LOG_LEVEL`                               | Pino log level. Production logs are JSON.                                                              |
-| `AUTH_DEV_MODE`                           | Development-only mock identity headers for foundation tests; keep `false` outside development.         |
-| `REQUEST_BODY_LIMIT_BYTES`                | Maximum HTTP request body size.                                                                        |
-| `FILE_UPLOAD_LIMIT_BYTES`                 | Fastify multipart file size limit.                                                                     |
-| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`  | Global rate-limit defaults. Route-specific limits can be added later.                                  |
-| `EXTERNAL_REQUEST_TIMEOUT_MS`             | Default timeout for future provider calls.                                                             |
-| `EXTERNAL_RETRY_LIMIT`                    | Maximum retry budget for explicitly safe/idempotent operations.                                        |
-| `SHUTDOWN_TIMEOUT_MS`                     | Maximum graceful-shutdown window.                                                                      |
-| `TRUST_PROXY`                             | Enables proxy-aware client IP handling; only enable when the deployment proxy is trusted.              |
+| Variable                                  | Purpose                                                                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                | `development`, `staging`, or `production`.                                                     |
+| `PORT`                                    | HTTP port; defaults to `4000`.                                                                 |
+| `API_BASE_URL`                            | Base URL used in OpenAPI metadata; staging and production require HTTPS.                       |
+| `DATABASE_URL`                            | PostgreSQL connection string used by Prisma, migrations, seed, and readiness checks.           |
+| `POSTGRES_DB`, `POSTGRES_USER`            | Local PostgreSQL database and role names.                                                      |
+| `POSTGRES_PASSWORD`, `POSTGRES_PORT`      | Local PostgreSQL credentials and role names.                                                   |
+| `JWT_SECRET`, `JWT_EXPIRES_IN`            | Legacy token configuration retained for compatibility; sessions are used by Issue #8.          |
+| `AUTH_SESSION_TTL_HOURS`                  | Server-managed session lifetime; defaults to 30 days.                                          |
+| `PASSWORD_RESET_TTL_MINUTES`              | Password-reset credential lifetime; defaults to 30 minutes.                                    |
+| `CORS_ORIGINS`                            | Comma-separated allowlist. Wildcard CORS is rejected in production.                            |
+| `STORAGE_PROVIDER`, `STORAGE_BUCKET`      | Future storage provider configuration.                                                         |
+| `AI_PROVIDER`, `AI_API_KEY`               | Future provider configuration. A key is required when a provider is selected.                  |
+| `NUTRITION_PROVIDER`, `NUTRITION_API_KEY` | Future nutrition provider configuration.                                                       |
+| `LOG_LEVEL`                               | Pino log level. Production logs are JSON.                                                      |
+| `AUTH_DEV_MODE`                           | Development-only mock identity headers for foundation tests; keep `false` outside development. |
+| `REQUEST_BODY_LIMIT_BYTES`                | Maximum HTTP request body size.                                                                |
+| `FILE_UPLOAD_LIMIT_BYTES`                 | Fastify multipart file size limit.                                                             |
+| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`  | Global rate-limit defaults. Route-specific limits can be added later.                          |
+| `EXTERNAL_REQUEST_TIMEOUT_MS`             | Default timeout for future provider calls.                                                     |
+| `EXTERNAL_RETRY_LIMIT`                    | Maximum retry budget for explicitly safe/idempotent operations.                                |
+| `SHUTDOWN_TIMEOUT_MS`                     | Maximum graceful-shutdown window.                                                              |
+| `TRUST_PROXY`                             | Enables proxy-aware client IP handling; only enable when the deployment proxy is trusted.      |
 
 Configuration is parsed with Zod during startup. Invalid staging/production configuration fails fast.
 
@@ -106,7 +108,7 @@ Fastify was selected because no backend existed, and its plugin lifecycle, reque
 
 The AI, nutrition, storage, session-token, and repository interfaces in `src/integrations` and `src/modules` are dependency-inversion boundaries. `withTimeout`, `withRetry`, and `executeExternal` provide shared provider failure handling. Retries are opt-in and therefore cannot accidentally retry non-idempotent future writes.
 
-Authentication is deliberately a foundation only. In development, `AUTH_DEV_MODE=true` enables test-only `X-Development-User-*` headers. Production does not accept those headers and has no fake authentication. Issue #8 can connect a secure session or access/refresh-token implementation through `SessionTokenProvider` and the authentication middleware. Authorization uses server-side roles and permissions and already includes `USER`, `ADMIN`, `MODERATOR`, `NUTRITION_EDITOR`, and `SUPPORT` role types.
+Authentication uses server-managed sessions. Only a scrypt password hash, a SHA-256 hash of each random session secret, and a SHA-256 hash of each reset secret are persisted. The raw session secret is sent in an HttpOnly, SameSite=Lax cookie and is Secure outside development. Sessions are revoked on logout and password reset. In development, `AUTH_DEV_MODE=true` continues to enable test-only `X-Development-User-*` headers for foundation routes; production does not accept those headers. Authorization uses server-side roles and permissions and includes `USER`, `ADMIN`, `MODERATOR`, `NUTRITION_EDITOR`, and `SUPPORT` role types.
 
 Readiness starts with application initialization and accepts injected dependency checks. When `DATABASE_URL` is configured, the backend creates one shared Prisma client and `/ready` verifies it with `SELECT 1`. Shutdown handles `SIGTERM` and `SIGINT`, closes Fastify first, then disconnects Prisma within a bounded timeout. Domain tables, migrations, seed data, and focused repositories live under `prisma/` and `src/modules/`.
 
@@ -130,4 +132,4 @@ The image uses a multi-stage build, installs only production dependencies in the
 
 Inputs are validated before controllers run. CORS uses a configured allowlist, headers are hardened with Helmet, request and multipart payloads are bounded, and rate limiting is global by default. Logs intentionally exclude request bodies, credentials, tokens, API keys, and image bytes. Error responses never include provider exceptions or stack traces.
 
-Full authentication, production image storage, meal CRUD HTTP routes, AI recognition/chat providers, subscriptions, dashboards, and CI/CD remain intentionally deferred to their respective issues. See [`docs/database.md`](../docs/database.md) for the database design and workflow. `npm run audit` checks all locked dependencies; if the registry audit service is unavailable, the command is reported as not verified rather than treated as a clean result.
+Authentication endpoints are `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, `POST /api/v1/auth/password-reset/request`, and `POST /api/v1/auth/password-reset/confirm`. Password reset delivery is behind an email provider abstraction; the default local provider intentionally sends nothing and never returns reset credentials. Production deployment must provide a real mail provider before enabling password reset. Full production image storage, meal CRUD HTTP routes, AI recognition/chat providers, subscriptions, dashboards, and CI/CD remain intentionally deferred to their respective issues. See [`docs/database.md`](../docs/database.md) for the database design and workflow. `npm run audit` checks all locked dependencies; if the registry audit service is unavailable, the command is reported as not verified rather than treated as a clean result.

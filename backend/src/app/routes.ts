@@ -6,6 +6,13 @@ import {
 } from "../common/middleware/auth.js";
 import { validateRequest } from "../common/middleware/request-validation.js";
 import type { SystemController } from "../modules/system/system.controller.js";
+import { AuthController } from "../modules/auth/auth.controller.js";
+import {
+  loginSchema,
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  registerSchema,
+} from "../modules/auth/auth.schemas.js";
 import {
   apiMetadataQuerySchema,
   echoBodySchema,
@@ -107,8 +114,40 @@ export async function registerRoutes(
     controller.echo,
   );
 
-  const authenticate = createAuthenticate(app.config);
-  const authorizeAdmin = createAuthorize(app.config, "admin:read");
+  const authController = new AuthController(app.authService, app.config);
+  const authenticate = createAuthenticate(app.config, app.authService);
+  const authorizeAdmin = createAuthorize(
+    app.config,
+    app.authService,
+    "admin:read",
+  );
+
+  app.post(
+    API_PREFIX + "/auth/register",
+    { preValidation: validateRequest("body", registerSchema) },
+    authController.register,
+  );
+  app.post(
+    API_PREFIX + "/auth/login",
+    { preValidation: validateRequest("body", loginSchema) },
+    authController.login,
+  );
+  app.post(API_PREFIX + "/auth/logout", authController.logout);
+  app.get(
+    API_PREFIX + "/auth/me",
+    { preHandler: authenticate },
+    authController.me,
+  );
+  app.post(
+    API_PREFIX + "/auth/password-reset/request",
+    { preValidation: validateRequest("body", passwordResetRequestSchema) },
+    authController.requestPasswordReset,
+  );
+  app.post(
+    API_PREFIX + "/auth/password-reset/confirm",
+    { preValidation: validateRequest("body", passwordResetConfirmSchema) },
+    authController.confirmPasswordReset,
+  );
 
   app.get(
     `${API_PREFIX}/foundation/me`,
@@ -116,8 +155,7 @@ export async function registerRoutes(
       preHandler: authenticate,
       schema: {
         tags: ["foundation"],
-        description:
-          "Development-only identity boundary. Issue #8 will provide real token/session verification.",
+        description: "Authenticated identity boundary.",
         response: {
           200: currentUserResponseJsonSchema,
           401: errorResponseJsonSchema,
@@ -132,8 +170,7 @@ export async function registerRoutes(
       preHandler: [authenticate, authorizeAdmin],
       schema: {
         tags: ["foundation"],
-        description:
-          "Development-only authorization boundary. Authorization remains server-side.",
+        description: "Server-side authorization boundary.",
         response: {
           200: adminCheckResponseJsonSchema,
           401: errorResponseJsonSchema,

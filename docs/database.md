@@ -9,7 +9,7 @@ capture → confirm → understand flow.
 
 | Prototype concept | Database entity | Future API usage |
 | --- | --- | --- |
-| Account and profile | `User`, `UserPreference`, `UserConsent` | Issue #8 authentication and profile/privacy endpoints |
+| Account and profile | `User`, `UserPreference`, `UserConsent`, `Session`, `PasswordResetToken` | Issue #8 authentication and profile/privacy endpoints |
 | Searchable Vietnamese food | `Food`, `FoodAlias` | `GET /api/foods/search` |
 | Nutrition provenance | `FoodSource`, `NutritionVersion`, `FoodNutrition` | Food lookup and calculation services |
 | Captured diary event | `Meal`, `MealItem` | Meal CRUD and diary endpoints |
@@ -46,6 +46,14 @@ write-once; retries return the existing snapshot.
 historical values for a confirmed meal are the item snapshots, not a later
 recalculation from the current food table.
 
+Authentication stores a scrypt password hash, a SHA-256 hash of each random
+session secret, and a SHA-256 hash of each password-reset secret. The raw
+session secret is held only by the HttpOnly cookie; reset delivery is delegated
+to an email provider and reset secrets are short-lived and single-use. The
+additive authentication migration preserves existing users by making the new
+password field nullable; accounts without a password cannot authenticate until
+an approved account migration flow is provided.
+
 Nutrition columns use fixed conventions: `calories` is kcal, protein/
 carbohydrates/fat/fiber/sugar are grams, and `sodium` is milligrams. Decimal
 columns are used for portions and nutrition values so calculations do not rely
@@ -70,8 +78,9 @@ Use `npm run db:migrate:dev -- --name <change-name>` only for a local schema
 change. Deploy an already-reviewed migration with `npm run db:migrate` (which
 runs `prisma migrate deploy`). Never point `migrate dev` at production.
 
-The committed migration is
-`20260825200000_init_nutrition_schema`.
+The committed migrations are
+`20260825200000_init_nutrition_schema` and
+`20260825210000_add_authentication`.
 
 ## Seed data
 
