@@ -1,7 +1,9 @@
 FROM node:22-alpine AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
 RUN npm ci
+RUN npm run db:generate
 
 FROM dependencies AS build
 COPY tsconfig.json eslint.config.mjs ./
@@ -14,6 +16,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && addgroup -S nutri && adduser -S nutri -G nutri
+COPY --from=dependencies /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/dist ./dist
 USER nutri
 EXPOSE 4000

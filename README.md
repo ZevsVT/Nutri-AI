@@ -15,4 +15,9 @@ The production backend foundation lives in [`backend/`](backend/README.md). Run 
 
 ## Production integration notes
 
-Add authentication, server-side meal-analysis routes, PostgreSQL/Prisma, storage, and USDA FoodData Central behind the API boundary before using real user data. Keep AI and nutrition-provider keys on the server and retain the source/confidence metadata with every result.
+Issue #7 now provides the PostgreSQL/Prisma schema, migrations, seed workflow,
+and persistence repositories under `backend/`. Authentication, server-side
+meal-analysis routes, storage, and USDA FoodData Central integration still need
+to be added behind the API boundary before using real user data. Keep AI and
+nutrition-provider keys on the server and retain source/version/confidence
+metadata with every result.

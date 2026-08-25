@@ -14,7 +14,10 @@ The authenticated shell uses one primary navigation model across breakpoints:
 | Recipes | Browse practical, culturally relevant meal ideas | Demo data |
 | Profile | Preferences, privacy, and account controls | UI scaffold |
 
-The primary task is intentionally three steps: capture → confirm → understand. AI output is never persisted without an explicit confirmation action.
+The primary task is intentionally three steps: capture → confirm → understand.
+AI recognition metadata may be persisted for audit and correction, but it is
+never treated as confirmed meal nutrition without an explicit confirmation
+action.
 
 ## Component hierarchy
 
@@ -41,26 +44,34 @@ AppShell
 
 ## Domain schema
 
-The first server implementation should map these models to PostgreSQL/Prisma:
+Issue #7 maps the first persistence foundation to PostgreSQL/Prisma:
 
 ```text
-User(id, email, createdAt, updatedAt)
-UserPreference(userId, locale, ageRange, dietaryPreferences[], allergies[], interests[])
-Food(id, canonicalName, aliases[], cuisine, category)
-FoodNutrition(id, foodId, servingAmount, servingUnit, calories, proteinG, carbsG, fatG, fiberG, sugarG, sodiumMg, sourceId, nutritionVersion)
-FoodSource(id, name, externalId, sourceUrl, retrievedAt)
-Meal(id, userId, mealType, loggedAt, status, imageUrl, confidence, createdAt, updatedAt)
-MealItem(id, mealId, foodId, label, amount, unit, confidence, nutritionSnapshot)
-NutritionAnalysis(id, mealId, structuredResult, explanation, source, confidence, nutritionVersion)
-AIConversation(id, userId, contextMealId, createdAt, updatedAt)
-AIMessage(id, conversationId, role, content, groundingContext, createdAt)
-Recipe(id, title, cuisine, tags[], ingredients[], steps[], nutrition, allergens[])
+User(id, email, role, status, createdAt, updatedAt)
+UserPreference(userId, language, timezone, dietaryPreference, foodPreferences[], foodExclusions[])
+UserConsent(userId, consentType, version, status, grantedAt, revokedAt, createdAt)
+Food(id, canonicalName, nameVi, nameEn, aliases[], cuisine, category, isActive)
+FoodSource(id, name, provider, sourceType, sourceUrl, license)
+NutritionVersion(id, sourceId, version, effectiveFrom, effectiveTo)
+FoodNutrition(id, foodId, nutritionVersionId, servingAmount, servingUnit, nutrition values)
+Meal(id, userId, mealType, capturedAt, status, imageUrl, confirmedAt, deletedAt)
+MealItem(id, mealId, foodId, quantity, unit, displayName, confidence)
+MealItemNutrition(mealItemId, nutritionVersionId, sourceId, nutrition snapshot)
+NutritionAnalysis(mealId, status, cached totals, method, confidence)
+AIAnalysis(userId, mealId, provider, model, status, inputType, confidence)
+AIFoodPrediction(analysisId, foodId, predictedName, quantity, confidence)
+AICorrection(analysisId, predictionId, userId, correctionType, corrected food/portion)
+Recipe(id, nameVi, nameEn, servings, preparation times, difficulty, status)
+RecipeIngredient(recipeId, foodId, quantity, unit)
+RecipeNutrition(recipeId, nutrition values)
 WaterLog(id, userId, loggedAt, amountMl)
-NutritionInsight(id, userId, periodStart, periodEnd, type, message, evidence)
-UserConsent(id, userId, consentType, version, grantedAt, revokedAt)
+NutritionInsight(id, userId, periodStart, periodEnd, type, summary, data)
 ```
 
-Every nutrition record carries `source`, `confidence`, and `nutritionVersion`. A model can classify food and portion; it must not invent nutrition facts.
+`MealItemNutrition` preserves the values, portion, source, and nutrition version
+used at confirmation time. A model can classify food and portion; it must not
+invent nutrition facts. The database details, delete strategy, migrations, and
+repository boundaries are documented in [`docs/database.md`](database.md).
 
 ## API contracts
 

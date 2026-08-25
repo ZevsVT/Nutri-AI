@@ -4,12 +4,12 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "./app/app.js";
 import { installSignalHandlers } from "./app/shutdown.js";
 import { loadConfig } from "./config/env.js";
-import { createPostgresDatabase } from "./integrations/database/postgres-database.js";
+import { createPrismaDatabase } from "./integrations/database/prisma-database.js";
 
 dotenv.config({ path: resolve(process.cwd(), ".env") });
 
 const config = loadConfig();
-const database = createPostgresDatabase(config.databaseUrl);
+const database = createPrismaDatabase(config.databaseUrl);
 const closeDatabase = async (): Promise<void> => {
   await database?.close();
 };
