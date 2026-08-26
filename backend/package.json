@@ -10,7 +10,7 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/main.js",
-    "test": "npm run db:generate && npm run build && node --test dist/tests/app.test.js dist/tests/api.test.js dist/tests/auth.test.js dist/tests/config.test.js dist/tests/external.test.js dist/tests/shutdown.test.js dist/tests/upload.test.js dist/tests/database.test.js",
+    "test": "npm run db:generate && npm run build && node --test dist/tests/app.test.js dist/tests/api.test.js dist/tests/auth.test.js dist/tests/config.test.js dist/tests/external.test.js dist/tests/shutdown.test.js dist/tests/upload.test.js dist/tests/storage.test.js dist/tests/database.test.js",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "format": "prettier --write .",

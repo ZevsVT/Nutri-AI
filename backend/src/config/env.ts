@@ -56,8 +56,26 @@ const rawEnvironmentSchema = z.object({
   AUTH_SESSION_TTL_HOURS: optionalNumber(720, 1, 8_760),
   PASSWORD_RESET_TTL_MINUTES: optionalNumber(30, 5, 1_440),
   CORS_ORIGINS: z.string().default("http://localhost:5173"),
-  STORAGE_PROVIDER: z.string().min(1).default("none"),
+  STORAGE_PROVIDER: z.enum(["none", "local", "s3"]).default("local"),
   STORAGE_BUCKET: emptyStringAsUndefined,
+  STORAGE_REGION: z.string().trim().min(1).max(64).default("us-east-1"),
+  STORAGE_ENDPOINT: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z
+      .string()
+      .url()
+      .refine(
+        (value) => value.startsWith("http://") || value.startsWith("https://"),
+        "STORAGE_ENDPOINT must use HTTP or HTTPS",
+      )
+      .optional(),
+  ),
+  STORAGE_ACCESS_KEY: emptyStringAsUndefined,
+  STORAGE_SECRET_KEY: emptyStringAsUndefined,
+  STORAGE_LOCAL_ROOT: z.string().trim().min(1).max(500).default(".data/storage"),
+  STORAGE_READ_URL_TTL_SECONDS: optionalNumber(900, 60, 604_800),
+  STORAGE_TEMPORARY_TTL_HOURS: optionalNumber(24, 1, 168),
+  STORAGE_RETENTION_DAYS: optionalNumber(30, 1, 3_650),
   AI_PROVIDER: z.string().min(1).default("none"),
   AI_API_KEY: emptyStringAsUndefined,
   NUTRITION_PROVIDER: z.string().min(1).default("none"),
@@ -90,8 +108,16 @@ export interface AppConfig {
   authSessionTtlHours: number;
   passwordResetTtlMinutes: number;
   corsOrigins: string[];
-  storageProvider: string;
+  storageProvider: "none" | "local" | "s3";
   storageBucket?: string;
+  storageRegion: string;
+  storageEndpoint?: string;
+  storageAccessKey?: string;
+  storageSecretKey?: string;
+  storageLocalRoot: string;
+  storageReadUrlTtlSeconds: number;
+  storageTemporaryTtlHours: number;
+  storageRetentionDays: number;
   aiProvider: string;
   aiApiKey?: string;
   nutritionProvider: string;
@@ -190,10 +216,18 @@ export function loadConfig(
     );
   }
 
-  if (parsed.STORAGE_PROVIDER !== "none" && !parsed.STORAGE_BUCKET) {
+  if (parsed.STORAGE_PROVIDER === "s3" && !parsed.STORAGE_BUCKET) {
     configurationIssues.push(
       "STORAGE_BUCKET is required when STORAGE_PROVIDER is configured",
     );
+  }
+
+  if (parsed.STORAGE_PROVIDER === "s3" && (!parsed.STORAGE_ACCESS_KEY || !parsed.STORAGE_SECRET_KEY)) {
+    configurationIssues.push("STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY are required for S3 storage");
+  }
+
+  if (secureEnvironment && parsed.STORAGE_PROVIDER === "none") {
+    configurationIssues.push("STORAGE_PROVIDER must be local or s3 in staging or production");
   }
 
   if (configurationIssues.length > 0) {
@@ -214,6 +248,14 @@ export function loadConfig(
     corsOrigins,
     storageProvider: parsed.STORAGE_PROVIDER,
     storageBucket: parsed.STORAGE_BUCKET,
+    storageRegion: parsed.STORAGE_REGION,
+    storageEndpoint: parsed.STORAGE_ENDPOINT,
+    storageAccessKey: parsed.STORAGE_ACCESS_KEY,
+    storageSecretKey: parsed.STORAGE_SECRET_KEY,
+    storageLocalRoot: parsed.STORAGE_LOCAL_ROOT,
+    storageReadUrlTtlSeconds: parsed.STORAGE_READ_URL_TTL_SECONDS,
+    storageTemporaryTtlHours: parsed.STORAGE_TEMPORARY_TTL_HOURS,
+    storageRetentionDays: parsed.STORAGE_RETENTION_DAYS,
     aiProvider: parsed.AI_PROVIDER,
     aiApiKey: parsed.AI_API_KEY,
     nutritionProvider: parsed.NUTRITION_PROVIDER,

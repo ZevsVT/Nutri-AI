@@ -3,9 +3,8 @@
 This directory contains the production backend foundation from Issue #6 and
 the PostgreSQL + Prisma persistence foundation from Issue #7. It provides a
 versioned Fastify REST API, security and operational middleware, typed error and
-response contracts, health/readiness checks, Prisma migrations/seeds, and
-focused data-access repositories. Product HTTP routes, full authentication,
-storage, billing, and provider integrations remain subsequent issues.
+response contracts, health/readiness checks, Prisma migrations/seeds, focused
+data-access repositories, and private image storage for meal analysis.
 
 ## Local setup
 
@@ -37,7 +36,12 @@ The API listens on `http://localhost:4000` by default. The frontend remains at `
 | `AUTH_SESSION_TTL_HOURS`                  | Server-managed session lifetime; defaults to 30 days.                                          |
 | `PASSWORD_RESET_TTL_MINUTES`              | Password-reset credential lifetime; defaults to 30 minutes.                                    |
 | `CORS_ORIGINS`                            | Comma-separated allowlist. Wildcard CORS is rejected in production.                            |
-| `STORAGE_PROVIDER`, `STORAGE_BUCKET`      | Future storage provider configuration.                                                         |
+| `STORAGE_PROVIDER`, `STORAGE_BUCKET`      | `local` for development or `s3` for private S3-compatible object storage.                     |
+| `STORAGE_REGION`, `STORAGE_ENDPOINT`      | S3 region and optional S3-compatible endpoint.                                                  |
+| `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`| Server-only S3 credentials; never expose them to the frontend.                                |
+| `STORAGE_LOCAL_ROOT`                      | Private filesystem root used by the local provider.                                             |
+| `STORAGE_READ_URL_TTL_SECONDS`            | Short-lived S3 read URL lifetime; local reads remain authenticated API requests.               |
+| `STORAGE_TEMPORARY_TTL_HOURS`, `STORAGE_RETENTION_DAYS` | Abandoned upload and soft-deleted meal retention windows.                    |
 | `AI_PROVIDER`, `AI_API_KEY`               | Future provider configuration. A key is required when a provider is selected.                  |
 | `NUTRITION_PROVIDER`, `NUTRITION_API_KEY` | Future nutrition provider configuration.                                                       |
 | `LOG_LEVEL`                               | Pino log level. Production logs are JSON.                                                      |
@@ -132,4 +136,4 @@ The image uses a multi-stage build, installs only production dependencies in the
 
 Inputs are validated before controllers run. CORS uses a configured allowlist, headers are hardened with Helmet, request and multipart payloads are bounded, and rate limiting is global by default. Logs intentionally exclude request bodies, credentials, tokens, API keys, and image bytes. Error responses never include provider exceptions or stack traces.
 
-Authentication endpoints are `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, `POST /api/v1/auth/password-reset/request`, and `POST /api/v1/auth/password-reset/confirm`. Password reset delivery is behind an email provider abstraction; the default local provider intentionally sends nothing and never returns reset credentials. Production deployment must provide a real mail provider before enabling password reset. Full production image storage, meal CRUD HTTP routes, AI recognition/chat providers, subscriptions, dashboards, and CI/CD remain intentionally deferred to their respective issues. See [`docs/database.md`](../docs/database.md) for the database design and workflow. `npm run audit` checks all locked dependencies; if the registry audit service is unavailable, the command is reported as not verified rather than treated as a clean result.
+Authentication endpoints are `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, `POST /api/v1/auth/password-reset/request`, and `POST /api/v1/auth/password-reset/confirm`. Private storage endpoints and the image-analysis flow are documented in [`docs/storage.md`](../docs/storage.md). Password reset delivery is behind an email provider abstraction; the default local provider intentionally sends nothing and never returns reset credentials. Production deployment must provide a real mail provider before enabling password reset. See [`docs/database.md`](../docs/database.md) for the database design and workflow. `npm run audit` checks all locked dependencies; if the registry audit service is unavailable, the command is reported as not verified rather than treated as a clean result.

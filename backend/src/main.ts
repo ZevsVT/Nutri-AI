@@ -7,11 +7,18 @@ import { loadConfig } from "./config/env.js";
 import { createPrismaDatabase } from "./integrations/database/prisma-database.js";
 import { PrismaAuthRepository } from "./modules/auth/auth.repository.js";
 import { PrismaBusinessApiService } from "./modules/api/api.service.js";
+import { InMemoryStorageObjectRepository, PrismaStorageObjectRepository } from "./modules/storage/storage.repository.js";
+import { StorageService, createStorageProvider } from "./modules/storage/storage.service.js";
 
 dotenv.config({ path: resolve(process.cwd(), ".env") });
 
 const config = loadConfig();
 const database = createPrismaDatabase(config.databaseUrl);
+const storageService = new StorageService(
+  createStorageProvider(config),
+  database ? new PrismaStorageObjectRepository(database.client) : new InMemoryStorageObjectRepository(),
+  config,
+);
 const closeDatabase = async (): Promise<void> => {
   await database?.close();
 };
@@ -24,8 +31,9 @@ try {
       ? new PrismaAuthRepository(database.client)
       : undefined,
     businessApiService: database
-      ? new PrismaBusinessApiService(database.client)
+      ? new PrismaBusinessApiService(database.client, undefined, storageService)
       : undefined,
+    storageService,
     readinessChecks: database
       ? [{ name: "database", check: () => database.ping() }]
       : [],

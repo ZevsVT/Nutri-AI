@@ -7,6 +7,8 @@ import {
 import { validateRequest } from "../common/middleware/request-validation.js";
 import type { SystemController } from "../modules/system/system.controller.js";
 import type { ApiController } from "../modules/api/api.controller.js";
+import type { StorageController } from "../modules/storage/storage.controller.js";
+import { storageObjectParamsSchema } from "../modules/storage/storage.schemas.js";
 import { AuthController } from "../modules/auth/auth.controller.js";
 import {
   loginSchema,
@@ -61,6 +63,7 @@ export async function registerRoutes(
   app: FastifyInstance,
   controller: SystemController,
   apiController?: ApiController,
+  storageController?: StorageController,
 ): Promise<void> {
   app.get(
     "/health",
@@ -227,4 +230,11 @@ export async function registerRoutes(
   app.get(`${API_PREFIX}/water`, { ...privateRoute, ...validate("query", waterListSchema) }, handler(apiController.listWater));
   app.get(`${API_PREFIX}/insights`, { ...privateRoute, ...validate("query", insightsSchema) }, handler(apiController.listInsights));
   app.post(`${API_PREFIX}/barcode/scan`, { ...privateRoute, ...validate("body", barcodeSchema) }, handler(apiController.scanBarcode));
+
+  if (storageController) {
+    app.post(`${API_PREFIX}/storage/uploads`, { preHandler: authenticate, bodyLimit: app.config.fileUploadLimitBytes + 65_536 }, handler(storageController.upload));
+    app.get(`${API_PREFIX}/storage/objects/:id`, { preHandler: [authenticate], ...validate("params", storageObjectParamsSchema) }, handler(storageController.read));
+    app.get(`${API_PREFIX}/storage/objects/:id/url`, { preHandler: [authenticate], ...validate("params", storageObjectParamsSchema) }, handler(storageController.readUrl));
+    app.delete(`${API_PREFIX}/storage/objects/:id`, { preHandler: [authenticate], ...validate("params", storageObjectParamsSchema) }, handler(storageController.delete));
+  }
 }

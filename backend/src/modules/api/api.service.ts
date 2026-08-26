@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { AppError } from "../../common/errors/app-error.js";
 import { NoopBarcodeProvider, type BarcodeProvider } from "../../integrations/barcode/barcode-provider.js";
+import type { StorageService } from "../storage/storage.service.js";
 
 export interface NutritionTotals {
   calories: number;
@@ -45,6 +46,7 @@ export interface MealDto {
   confirmedAt: string | null;
   items: Array<MealItemInput & { id: string; nutrition?: NutritionTotals }>;
   totals: NutritionTotals;
+  imageReference: string | null;
 }
 
 export interface AnalysisDto {
@@ -107,12 +109,12 @@ interface MemoryMeal extends MealDto { userId: string; deleted: boolean; }
 interface MemoryAnalysis extends AnalysisDto { userId: string; corrections?: MealItemInput[]; }
 type NutritionRecordLike = { nutritionVersionId: string; servingAmount: unknown; servingUnit: string; calories: unknown; protein: unknown; carbohydrates: unknown; fat: unknown; fiber: unknown; sugar: unknown; sodium: unknown; nutritionVersion: { sourceId: string; effectiveFrom: Date; version: string; source: { name: string; provider: string } } };
 type MealItemLike = { id: string; foodId: string | null; quantity: unknown; unit: string; displayName: string; nutritionSnapshot: { calories: unknown; protein: unknown; carbohydrates: unknown; fat: unknown; fiber: unknown } | null };
-type MealLike = { id: string; mealType: MealDto["mealType"]; name: string; capturedAt: Date; status: string; notes: string | null; confirmedAt: Date | null; items: MealItemLike[] };
+type MealLike = { id: string; mealType: MealDto["mealType"]; name: string; capturedAt: Date; status: string; notes: string | null; confirmedAt: Date | null; imageUrl?: string | null; items: MealItemLike[] };
 type PredictionLike = { id: string; predictedName: string; foodId: string | null; estimatedQuantity: unknown; estimatedUnit: string | null; confidence: unknown };
 
 /** Deterministic service used when the app is booted without DATABASE_URL and in API contract tests. */
 export class InMemoryBusinessApiService implements BusinessApiService {
-  constructor(private readonly barcodeProvider: BarcodeProvider = new NoopBarcodeProvider()) {}
+  constructor(private readonly barcodeProvider: BarcodeProvider = new NoopBarcodeProvider(), private readonly storageService?: StorageService) {}
   private readonly foods: MemoryFood[] = [{ id: "food-demo", name: { vi: "Phở bò", en: "Beef pho" }, category: "NOODLE", cuisine: "VIETNAMESE", aliases: ["pho", "phở"], nutrition: emptyTotals() }];
   private readonly meals: MemoryMeal[] = [];
   private readonly analyses: MemoryAnalysis[] = [];
@@ -133,7 +135,7 @@ export class InMemoryBusinessApiService implements BusinessApiService {
 
   async createMeal(userId: string, input: MealInput) {
     const items = input.items.map((item) => this.toMealItem(item));
-    const meal: MemoryMeal = { id: randomUUID(), userId, mealType: input.mealType, name: input.name ?? "Untitled meal", capturedAt: input.capturedAt.toISOString(), status: "CONFIRMED", notes: input.notes ?? null, confirmedAt: new Date().toISOString(), items, totals: items.reduce((sum, item) => addTotals(sum, item.nutrition ?? emptyTotals()), emptyTotals()), deleted: false };
+    const meal: MemoryMeal = { id: randomUUID(), userId, mealType: input.mealType, name: input.name ?? "Untitled meal", capturedAt: input.capturedAt.toISOString(), status: "CONFIRMED", notes: input.notes ?? null, confirmedAt: new Date().toISOString(), imageReference: null, items, totals: items.reduce((sum, item) => addTotals(sum, item.nutrition ?? emptyTotals()), emptyTotals()), deleted: false };
     this.meals.push(meal);
     return this.publicMeal(meal);
   }
@@ -156,14 +158,21 @@ export class InMemoryBusinessApiService implements BusinessApiService {
     return this.publicMeal(meal);
   }
 
-  async deleteMeal(userId: string, id: string) { this.findMeal(userId, id).deleted = true; }
+  async deleteMeal(userId: string, id: string) { const meal = this.findMeal(userId, id); meal.deleted = true; await this.storageService?.retainAfterMealDelete(meal.imageReference, userId); }
 
   async createAnalysis(userId: string, input: { mealId?: string; inputType: string; inputReference: string }) {
+    if (input.inputType === "IMAGE") {
+      if (!this.storageService) throw new AppError("STORAGE_ERROR", "Storage is not configured");
+      await this.storageService.getByReferenceForUser(input.inputReference, userId);
+    }
     let mealId = input.mealId;
     if (mealId) this.findMeal(userId, mealId);
     else mealId = (await this.createMeal(userId, { mealType: "OTHER", capturedAt: new Date(), items: [] })).id;
+    const meal = this.findMeal(userId, mealId);
+    if (input.inputType === "IMAGE") meal.imageReference = input.inputReference;
     const analysis: MemoryAnalysis = { analysisId: randomUUID(), mealId, userId, status: "PENDING", inputType: input.inputType, inputReference: input.inputReference, predictions: [] };
     this.analyses.push(analysis);
+    if (input.inputType === "IMAGE") await this.storageService?.attachForUser(input.inputReference, userId);
     return this.publicAnalysis(analysis);
   }
 
@@ -200,7 +209,7 @@ export class InMemoryBusinessApiService implements BusinessApiService {
 
 /** Production adapter hook. It is deliberately explicit so persistence can be supplied without leaking Prisma into HTTP handlers. */
 export class PrismaBusinessApiService implements BusinessApiService {
-  constructor(public readonly prisma: PrismaClient, private readonly barcodeProvider: BarcodeProvider = new NoopBarcodeProvider()) {}
+  constructor(public readonly prisma: PrismaClient, private readonly barcodeProvider: BarcodeProvider = new NoopBarcodeProvider(), private readonly storageService?: StorageService) {}
 
   async searchFoods({ query, page, pageSize }: { query: string; locale: string; page: number; pageSize: number }) {
     if (!query.trim()) return { data: [], total: 0 };
@@ -256,13 +265,18 @@ export class PrismaBusinessApiService implements BusinessApiService {
     return this.getMeal(userId, id);
   }
 
-  async deleteMeal(userId: string, id: string) { const result = await this.prisma.meal.updateMany({ where: { id, userId, deletedAt: null }, data: { deletedAt: new Date(), status: "DELETED" } }); if (result.count === 0) throw new AppError("MEAL_NOT_FOUND", "Meal was not found"); }
+  async deleteMeal(userId: string, id: string) { const meal = await this.prisma.meal.findFirst({ where: { id, userId, deletedAt: null }, select: { imageUrl: true } }); if (!meal) throw new AppError("MEAL_NOT_FOUND", "Meal was not found"); const result = await this.prisma.meal.updateMany({ where: { id, userId, deletedAt: null }, data: { deletedAt: new Date(), status: "DELETED" } }); if (result.count === 0) throw new AppError("MEAL_NOT_FOUND", "Meal was not found"); await this.storageService?.retainAfterMealDelete(meal.imageUrl, userId); }
 
   async createAnalysis(userId: string, input: { mealId?: string; inputType: string; inputReference: string }) {
+    if (input.inputType === "IMAGE") {
+      if (!this.storageService) throw new AppError("STORAGE_ERROR", "Storage is not configured");
+      await this.storageService.getByReferenceForUser(input.inputReference, userId);
+    }
     let mealId = input.mealId;
-    if (mealId) { const meal = await this.prisma.meal.findFirst({ where: { id: mealId, userId, deletedAt: null }, select: { id: true } }); if (!meal) throw new AppError("MEAL_NOT_FOUND", "Meal was not found"); }
+    if (mealId) { const meal = await this.prisma.meal.findFirst({ where: { id: mealId, userId, deletedAt: null }, select: { id: true } }); if (!meal) throw new AppError("MEAL_NOT_FOUND", "Meal was not found"); if (input.inputType === "IMAGE") await this.prisma.meal.update({ where: { id: mealId }, data: { imageUrl: input.inputReference, status: "ANALYZING" } }); }
     else mealId = (await this.prisma.meal.create({ data: { userId, mealType: "OTHER", capturedAt: new Date(), status: "ANALYZING", imageUrl: input.inputReference }, select: { id: true } })).id;
     const analysis = await this.prisma.aIAnalysis.create({ data: { userId, mealId, provider: "application", model: "pending", inputType: input.inputType as "IMAGE" | "TEXT" | "BARCODE" | "MANUAL", inputReference: input.inputReference } });
+    if (input.inputType === "IMAGE") await this.storageService?.attachForUser(input.inputReference, userId);
     return this.analysisDto(analysis, []);
   }
 
@@ -318,7 +332,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
   }
   private latestNutrition(records: readonly NutritionRecordLike[]) { return [...records].sort((a, b) => new Date(b.nutritionVersion.effectiveFrom).getTime() - new Date(a.nutritionVersion.effectiveFrom).getTime())[0]; }
   private scaledNutrition(record: NutritionRecordLike, quantity: number): ScaledNutrition { const factor = quantity / Number(record.servingAmount); return { calories: Number(record.calories) * factor, protein: Number(record.protein) * factor, carbohydrates: Number(record.carbohydrates) * factor, fat: Number(record.fat) * factor, fiber: Number(record.fiber) * factor, sugar: Number(record.sugar) * factor, sodium: Number(record.sodium) * factor }; }
-  private mealDto(meal: MealLike): MealDto { const items = meal.items.map((item) => ({ id: item.id, foodId: item.foodId ?? "", quantity: Number(item.quantity), unit: item.unit, displayName: item.displayName, nutrition: item.nutritionSnapshot ? { calories: Number(item.nutritionSnapshot.calories), protein: Number(item.nutritionSnapshot.protein), carbohydrates: Number(item.nutritionSnapshot.carbohydrates), fat: Number(item.nutritionSnapshot.fat), fiber: Number(item.nutritionSnapshot.fiber) } : undefined })); return { id: meal.id, mealType: meal.mealType, name: meal.name, capturedAt: meal.capturedAt.toISOString(), status: meal.status, notes: meal.notes, confirmedAt: meal.confirmedAt?.toISOString() ?? null, items, totals: items.reduce((sum: NutritionTotals, item) => addTotals(sum, item.nutrition ?? emptyTotals()), emptyTotals()) }; }
+  private mealDto(meal: MealLike): MealDto { const items = meal.items.map((item) => ({ id: item.id, foodId: item.foodId ?? "", quantity: Number(item.quantity), unit: item.unit, displayName: item.displayName, nutrition: item.nutritionSnapshot ? { calories: Number(item.nutritionSnapshot.calories), protein: Number(item.nutritionSnapshot.protein), carbohydrates: Number(item.nutritionSnapshot.carbohydrates), fat: Number(item.nutritionSnapshot.fat), fiber: Number(item.nutritionSnapshot.fiber) } : undefined })); return { id: meal.id, mealType: meal.mealType, name: meal.name, capturedAt: meal.capturedAt.toISOString(), status: meal.status, notes: meal.notes, confirmedAt: meal.confirmedAt?.toISOString() ?? null, imageReference: meal.imageUrl ?? null, items, totals: items.reduce((sum: NutritionTotals, item) => addTotals(sum, item.nutrition ?? emptyTotals()), emptyTotals()) }; }
   private analysisDto(analysis: { id: string; mealId: string; status: string; inputType: string; inputReference: string | null }, predictions: readonly PredictionLike[]): AnalysisDto { return { analysisId: analysis.id, mealId: analysis.mealId, status: analysis.status === "RUNNING" ? "PROCESSING" : analysis.status === "COMPLETED" ? "READY" : analysis.status as AnalysisDto["status"], inputType: analysis.inputType, inputReference: analysis.inputReference ?? null, predictions: predictions.map((prediction) => ({ id: prediction.id, predictedName: prediction.predictedName, foodId: prediction.foodId, quantity: prediction.estimatedQuantity === null ? null : Number(prediction.estimatedQuantity), unit: prediction.estimatedUnit, confidence: prediction.confidence === null ? null : Number(prediction.confidence) })) }; }
   private async aggregateNutrition(userId: string, from: Date, to: Date) { const meals = await this.prisma.meal.findMany({ where: { userId, deletedAt: null, status: "CONFIRMED", capturedAt: { gte: from, lt: to } }, include: { items: { include: { nutritionSnapshot: true } } }, orderBy: { capturedAt: "asc" } }); const totals = meals.flatMap((meal) => meal.items).reduce((sum, item) => addTotals(sum, item.nutritionSnapshot ? { calories: Number(item.nutritionSnapshot.calories), protein: Number(item.nutritionSnapshot.protein), carbohydrates: Number(item.nutritionSnapshot.carbohydrates), fat: Number(item.nutritionSnapshot.fat), fiber: Number(item.nutritionSnapshot.fiber) } : emptyTotals()), emptyTotals()); return { period: { from: from.toISOString(), to: to.toISOString() }, totals, mealCount: meals.length, meals: meals.map((meal) => this.mealDto(meal)) }; }
 }
