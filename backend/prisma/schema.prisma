@@ -80,6 +80,13 @@ enum AIInputType {
   MANUAL
 }
 
+enum StorageObjectStatus {
+  UPLOADED
+  ATTACHED
+  RETAINED
+  DELETED
+}
+
 enum AICorrectionType {
   FOOD_REPLACED
   FOOD_REMOVED
@@ -127,6 +134,7 @@ model User {
   insights      NutritionInsight[]
   sessions      Session[]
   passwordResets PasswordResetToken[]
+  storageObjects StoredObject[]
 
   @@index([status])
 }
@@ -309,6 +317,24 @@ model Meal {
 
   @@index([userId, capturedAt])
   @@index([userId, status])
+}
+
+model StoredObject {
+  id          String              @id @default(uuid()) @db.Uuid
+  ownerId     String              @db.Uuid
+  objectKey   String              @unique @db.Text
+  contentType String              @db.VarChar(64)
+  sizeBytes   Int
+  fileName    String              @db.VarChar(128)
+  status      StorageObjectStatus @default(UPLOADED)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime?           @db.Timestamptz(3)
+  deletedAt   DateTime?           @db.Timestamptz(3)
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
+  @@index([status, expiresAt])
 }
 
 model MealItem {

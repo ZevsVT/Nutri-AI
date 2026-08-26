@@ -10,6 +10,14 @@ function config(): AppConfig {
 
 function user(id: string) { return { "x-development-user-id": id }; }
 
+function imageUpload(): { payload: Buffer; contentType: string } {
+  const boundary = "nutri-ai-test-boundary";
+  const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="meal.png"\r\nContent-Type: image/png\r\n\r\n`;
+  const footer = `\r\n--${boundary}--\r\n`;
+  return { payload: Buffer.concat([Buffer.from(header), image, Buffer.from(footer)]), contentType: `multipart/form-data; boundary=${boundary}` };
+}
+
 async function createMeal(app: FastifyInstance, userId: string) {
   const response = await app.inject({ method: "POST", url: "/api/v1/meals", headers: user(userId), payload: { mealType: "LUNCH", capturedAt: "2026-08-25T05:00:00.000Z", items: [{ foodId: "food-demo", quantity: 1, unit: "bowl", displayName: "Demo meal" }] } });
   assert.equal(response.statusCode, 201);
@@ -64,7 +72,10 @@ test("meal CRUD is user-scoped and list responses are paginated", async () => {
 test("analysis lifecycle, nutrition, water, assistant, and barcode contracts are available", async () => {
   const app = await buildApp({ config: config() });
   try {
-    const analysis = await app.inject({ method: "POST", url: "/api/v1/meal-analysis", headers: user("user-a"), payload: { inputType: "IMAGE", inputReference: "storage://temporary/user-a/meal.jpg" } });
+    const upload = imageUpload();
+    const uploaded = await app.inject({ method: "POST", url: "/api/v1/storage/uploads", headers: { ...user("user-a"), "content-type": upload.contentType }, payload: upload.payload });
+    assert.equal(uploaded.statusCode, 201);
+    const analysis = await app.inject({ method: "POST", url: "/api/v1/meal-analysis", headers: user("user-a"), payload: { inputType: "IMAGE", inputReference: uploaded.json().data.reference } });
     assert.equal(analysis.statusCode, 202);
     assert.equal(analysis.json().data.status, "PENDING");
     const analysisId = analysis.json().data.analysisId;

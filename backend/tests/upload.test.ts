@@ -29,7 +29,7 @@ test("upload metadata sanitizes names and preserves ownership-safe object keys",
     ownerId: "user/123",
     temporary: true,
   });
-  assert.match(firstKey, /^temporary\/user_123\//);
+  assert.match(firstKey, /^temporary\/[0-9a-f]{32}\//);
   assert.notEqual(firstKey, secondKey);
   assert.equal(firstKey.includes(".."), false);
   assert.equal(canAccessStoredObject("user/123", "user/123"), true);

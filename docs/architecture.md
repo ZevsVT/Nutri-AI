@@ -55,6 +55,7 @@ FoodSource(id, name, provider, sourceType, sourceUrl, license)
 NutritionVersion(id, sourceId, version, effectiveFrom, effectiveTo)
 FoodNutrition(id, foodId, nutritionVersionId, servingAmount, servingUnit, nutrition values)
 Meal(id, userId, mealType, capturedAt, status, imageUrl, confirmedAt, deletedAt)
+StoredObject(id, ownerId, objectKey, contentType, sizeBytes, status, expiresAt, deletedAt)
 MealItem(id, mealId, foodId, quantity, unit, displayName, confidence)
 MealItemNutrition(mealItemId, nutritionVersionId, sourceId, nutrition snapshot)
 NutritionAnalysis(mealId, status, cached totals, method, confidence)
@@ -105,6 +106,12 @@ input → vision recognition → food normalization → nutrition source lookup
 ```
 
 USDA FoodData Central is the international baseline. A curated Vietnamese-food table should be normalized into the same `FoodNutrition` shape and cached server-side.
+
+Meal images use the private storage flow documented in [`storage.md`](storage.md):
+authenticated upload → server-generated object key → ownership metadata →
+controlled `storage://object/{uuid}` analysis reference. The application uses a
+local filesystem provider in development and an S3-compatible provider in
+production; the provider is never imported by controllers or the AI boundary.
 
 ## User flow
 

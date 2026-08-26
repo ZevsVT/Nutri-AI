@@ -42,6 +42,10 @@ database, or stack-trace details:
 | `POST/GET /water` | Required | Create and list water logs |
 | `GET /insights` | Required | User-owned transparent nutrition insights |
 | `POST /barcode/scan` | Required | Provider-neutral barcode lookup contract |
+| `POST /storage/uploads` | Required | Validate and store one private JPEG, PNG, or WebP image |
+| `GET /storage/objects/:id` | Required | Authenticated image content read |
+| `GET /storage/objects/:id/url` | Required | Authenticated short-lived read URL or local API URL |
+| `DELETE /storage/objects/:id` | Required | Delete an unattached upload |
 
 ## Confirmation semantics
 
@@ -57,13 +61,19 @@ authenticated user ID. A missing owned resource is reported as a stable
 `MEAL_NOT_FOUND`, `FOOD_NOT_FOUND`, or `ANALYSIS_NOT_FOUND` error rather than
 revealing whether another user owns it.
 
+Image analysis references are stable `storage://object/{uuid}` values. The
+analysis service resolves them through the authenticated storage service before
+creating an analysis; client URLs, object keys, bucket names, and credentials
+are not accepted as image identity.
+
 ## Stable error codes
 
 `VALIDATION_ERROR`, `AUTHENTICATION_ERROR`, `AUTHORIZATION_ERROR`, `NOT_FOUND`,
 `FOOD_NOT_FOUND`, `MEAL_NOT_FOUND`, `ANALYSIS_NOT_FOUND`, `CONFLICT`,
 `INVALID_STATE`, `ANALYSIS_FAILED`, `ANALYSIS_NOT_READY`,
 `NUTRITION_DATA_UNAVAILABLE`, `AI_ANALYSIS_ERROR`, `EXTERNAL_SERVICE_ERROR`,
-`STORAGE_ERROR`, `DATABASE_ERROR`, `RATE_LIMITED`, and
+`STORAGE_ERROR`, `STORAGE_OBJECT_NOT_FOUND`, `STORAGE_LIMIT_EXCEEDED`,
+`STORAGE_INVALID_OBJECT`, `DATABASE_ERROR`, `RATE_LIMITED`, and
 `INTERNAL_SERVER_ERROR`.
 
 The API uses `400` for malformed input, `401`/`403` for auth failures, `404`

@@ -15,6 +15,7 @@ capture → confirm → understand flow.
 | Captured diary event | `Meal`, `MealItem` | Meal CRUD and diary endpoints |
 | Confirmed nutrition | `MealItemNutrition`, `NutritionAnalysis` | Analysis confirmation and daily totals |
 | Model recognition | `AIAnalysis`, `AIFoodPrediction` | Meal-analysis polling/retry flow |
+| Private meal media | `StoredObject` | Owned image metadata and cleanup lifecycle |
 | Human feedback | `AICorrection` | Evaluation and future personalization |
 | Recipes, habits, insights | `Recipe*`, `WaterLog`, `NutritionInsight` | Recipe, habit, and insight endpoints |
 
@@ -79,8 +80,9 @@ change. Deploy an already-reviewed migration with `npm run db:migrate` (which
 runs `prisma migrate deploy`). Never point `migrate dev` at production.
 
 The committed migrations are
-`20260825200000_init_nutrition_schema` and
-`20260825210000_add_authentication`.
+`20260825200000_init_nutrition_schema`,
+`20260825210000_add_authentication`, and
+`20260825220000_add_secure_storage`.
 
 ## Seed data
 
@@ -109,6 +111,12 @@ Persistence access is separated into focused repositories:
 - `MealRepository`
 - `NutritionRepository`
 - `AIAnalysisRepository`
+
+`StoredObject` keeps the stable object UUID, server-generated key, authenticated
+owner, validated media metadata, lifecycle status, and expiry timestamps. The
+meal and analysis fields retain only the stable `storage://object/{uuid}`
+reference. Uploaded-but-unattached objects expire automatically; attached
+objects are retained until the configured post-soft-delete retention period.
 
 User-owned reads and writes use `findByIdForUser`, `listForUser`, or an
 equivalent `(entityId, userId)` filter. Repositories do not implement

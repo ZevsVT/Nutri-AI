@@ -32,6 +32,10 @@ import {
   InMemoryBusinessApiService,
   type BusinessApiService,
 } from "../modules/api/api.service.js";
+import { StorageController } from "../modules/storage/storage.controller.js";
+import { InMemoryStorageObjectRepository, type StorageObjectRepository } from "../modules/storage/storage.repository.js";
+import { StorageService, createStorageProvider } from "../modules/storage/storage.service.js";
+import type { StorageProvider } from "../integrations/storage/storage-provider.js";
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -40,6 +44,9 @@ export interface BuildAppOptions {
   authRepository?: AuthRepository;
   passwordResetEmailProvider?: PasswordResetEmailProvider;
   businessApiService?: BusinessApiService;
+  storageProvider?: StorageProvider;
+  storageObjectRepository?: StorageObjectRepository;
+  storageService?: StorageService;
 }
 
 const requestIdPattern = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -69,6 +76,11 @@ export async function buildApp(
     logController: new LogController({ disableRequestLogging: true }),
   });
   const readiness = new ReadinessService(options.readinessChecks, app.log);
+  const storageService = options.storageService ?? new StorageService(
+    options.storageProvider ?? createStorageProvider(config),
+    options.storageObjectRepository ?? new InMemoryStorageObjectRepository(),
+    config,
+  );
 
   app.decorate("config", config);
   app.decorate("readiness", readiness);
@@ -82,6 +94,7 @@ export async function buildApp(
     ),
   );
   app.decorateRequest("startedAt", 0);
+  app.addHook("onClose", async () => storageService.stopCleanup());
 
   await app.register(helmet, { global: true, contentSecurityPolicy: false });
   await app.register(cors, {
@@ -143,6 +156,7 @@ export async function buildApp(
         { name: "water", description: "User water logs" },
         { name: "insights", description: "Nutrition insights" },
         { name: "barcode", description: "Barcode provider contract" },
+        { name: "storage", description: "Private authenticated meal images" },
       ],
       components: {
         securitySchemes: {
@@ -212,6 +226,9 @@ export async function buildApp(
                       "EXTERNAL_SERVICE_ERROR",
                       "AI_ANALYSIS_ERROR",
                       "STORAGE_ERROR",
+                      "STORAGE_OBJECT_NOT_FOUND",
+                      "STORAGE_LIMIT_EXCEEDED",
+                      "STORAGE_INVALID_OBJECT",
                       "DATABASE_ERROR",
                       "INTERNAL_SERVER_ERROR",
                     ],
@@ -408,9 +425,11 @@ export async function buildApp(
   installErrorHandling(app);
   const systemService = new SystemService(config, readiness);
   const apiController = new ApiController(
-    options.businessApiService ?? new InMemoryBusinessApiService(),
+    options.businessApiService ?? new InMemoryBusinessApiService(undefined, storageService),
   );
-  await registerRoutes(app, new SystemController(systemService), apiController);
+  const storageController = new StorageController(storageService, config);
+  storageService.startCleanup(app.log);
+  await registerRoutes(app, new SystemController(systemService), apiController, storageController);
   await options.registerAdditionalRoutes?.(app);
   readiness.markInitialized();
 
