@@ -48,7 +48,11 @@ The API listens on `http://localhost:4000` by default. The frontend remains at `
 | `AUTH_DEV_MODE`                           | Development-only mock identity headers for foundation tests; keep `false` outside development. |
 | `REQUEST_BODY_LIMIT_BYTES`                | Maximum HTTP request body size.                                                                |
 | `FILE_UPLOAD_LIMIT_BYTES`                 | Fastify multipart file size limit.                                                             |
-| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`  | Global rate-limit defaults. Route-specific limits can be added later.                          |
+| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`  | Global rate-limit ceiling and fixed-window duration.                                             |
+| `RATE_LIMIT_ENABLED`                     | Enables the in-process limiter; defaults to `true`.                                              |
+| `RATE_LIMIT_AUTH_MAX`                    | Authentication-route ceiling, bounded by `RATE_LIMIT_MAX`; defaults to `10`.                    |
+| `RATE_LIMIT_EXPENSIVE_MAX`               | AI, meal-analysis, and barcode ceiling, bounded by the global maximum; defaults to `20`.         |
+| `RATE_LIMIT_UPLOAD_MAX`                  | Image-upload ceiling, bounded by the global maximum; defaults to `10`.                          |
 | `EXTERNAL_REQUEST_TIMEOUT_MS`             | Default timeout for future provider calls.                                                     |
 | `EXTERNAL_RETRY_LIMIT`                    | Maximum retry budget for explicitly safe/idempotent operations.                                |
 | `SHUTDOWN_TIMEOUT_MS`                     | Maximum graceful-shutdown window.                                                              |
@@ -80,9 +84,25 @@ Operational endpoints:
 ```text
 GET /health
 GET /ready
+GET /health/live
+GET /health/ready
+GET /metrics
 GET /api/v1
 GET /docs
 ```
+
+`/health/live` is a small process liveness response. `/health/ready` and the
+legacy `/ready` endpoint return `200 {"status":"ready"}` only after the app
+has initialized and all configured mandatory dependency checks pass; otherwise
+they return `503 {"status":"not_ready"}`. Dependency names and failure
+details are logged server-side and are not returned by health endpoints.
+
+`/metrics` is an in-process Prometheus-compatible snapshot intended for a
+single API instance. It reports `http_requests_total`, request duration and
+error counters, `rate_limit_rejections_total`, and
+`dependency_errors_total`. Labels are limited to method, route template,
+status, dependency, operation, or limiter category; request IDs, user IDs,
+resource IDs, query strings, and private URLs are never metric labels.
 
 Successful business-style responses use `{ "success": true, "data": ... }`. Errors use:
 
@@ -116,11 +136,15 @@ Authentication uses server-managed sessions. Only a scrypt password hash, a SHA-
 
 Readiness starts with application initialization and accepts injected dependency checks. When `DATABASE_URL` is configured, the backend creates one shared Prisma client and `/ready` verifies it with `SELECT 1`. Shutdown handles `SIGTERM` and `SIGINT`, closes Fastify first, then disconnects Prisma within a bounded timeout. Domain tables, migrations, seed data, and focused repositories live under `prisma/` and `src/modules/`.
 
-The global rate limiter currently uses Fastify's in-memory store. This is
-appropriate for local development and a single API instance; before deploying
-multiple API replicas, replace it with a shared store (for example Redis) and
-keep `TRUST_PROXY` aligned with the actual load balancer so client IPs cannot
-be spoofed.
+The rate limiter uses Fastify's in-memory store and a fixed window. General
+traffic uses `RATE_LIMIT_MAX`; authentication, expensive operations
+(`POST /api/v1/meal-analysis`, `POST /api/v1/ai/chat`, and barcode lookup),
+and image uploads use their respective lower ceilings. Private routes are
+keyed by the server-resolved authenticated user after authentication; public
+and anonymous routes use the request IP. Forwarded IP headers are only trusted
+when `TRUST_PROXY=true`. Before deploying multiple API replicas, replace the
+in-memory store with a shared store (for example Redis) while keeping
+`TRUST_PROXY` aligned with the actual load balancer.
 
 ## Docker
 
@@ -134,6 +158,13 @@ The image uses a multi-stage build, installs only production dependencies in the
 
 ## Security and scope
 
-Inputs are validated before controllers run. CORS uses a configured allowlist, headers are hardened with Helmet, request and multipart payloads are bounded, and rate limiting is global by default. Logs intentionally exclude request bodies, credentials, tokens, API keys, and image bytes. Error responses never include provider exceptions or stack traces.
+Inputs are validated before controllers run. CORS uses a configured allowlist, headers are hardened with Helmet, request and multipart payloads are bounded, and rate limiting is enabled by default. Every request receives a validated `X-Request-ID` or a server-generated ID, which is returned in the response and included in structured logs and errors. Logs intentionally exclude request bodies, credentials, tokens, API keys, signed URLs, and image bytes. Error responses never include provider exceptions or stack traces.
+
+Operational troubleshooting:
+
+- For repeated `429` responses, inspect the structured `route`, `limiterCategory`, and configured category/global ceilings. `Retry-After` is returned by the limiter.
+- For `503` readiness responses, inspect `readiness_check_failed` events and the corresponding `dependency_errors_total` metric. Client responses stay coarse.
+- Use the response `requestId` to correlate request completion, application error, provider, database, and storage events.
+- Storage cleanup failures are emitted as `storage_cleanup_failed`; logs contain only safe object identifiers and error types, never object URLs or credentials.
 
 Authentication endpoints are `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, `POST /api/v1/auth/password-reset/request`, and `POST /api/v1/auth/password-reset/confirm`. Private storage endpoints and the image-analysis flow are documented in [`docs/storage.md`](../docs/storage.md). Password reset delivery is behind an email provider abstraction; the default local provider intentionally sends nothing and never returns reset credentials. Production deployment must provide a real mail provider before enabling password reset. See [`docs/database.md`](../docs/database.md) for the database design and workflow. `npm run audit` checks all locked dependencies; if the registry audit service is unavailable, the command is reported as not verified rather than treated as a clean result.

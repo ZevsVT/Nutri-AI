@@ -75,7 +75,8 @@ test("analysis lifecycle, nutrition, water, assistant, and barcode contracts are
     const upload = imageUpload();
     const uploaded = await app.inject({ method: "POST", url: "/api/v1/storage/uploads", headers: { ...user("user-a"), "content-type": upload.contentType }, payload: upload.payload });
     assert.equal(uploaded.statusCode, 201);
-    const analysis = await app.inject({ method: "POST", url: "/api/v1/meal-analysis", headers: user("user-a"), payload: { inputType: "IMAGE", inputReference: uploaded.json().data.reference } });
+    const mealId = await createMeal(app, "user-a");
+    const analysis = await app.inject({ method: "POST", url: "/api/v1/meal-analysis", headers: user("user-a"), payload: { mealId, inputType: "IMAGE", inputReference: uploaded.json().data.reference } });
     assert.equal(analysis.statusCode, 202);
     assert.equal(analysis.json().data.status, "PENDING");
     const analysisId = analysis.json().data.analysisId;

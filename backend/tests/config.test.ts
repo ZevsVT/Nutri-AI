@@ -85,6 +85,27 @@ test("proxy and payload settings are parsed with safe bounds", () => {
   );
 });
 
+test("rate-limit settings are configurable and validated", () => {
+  const config = loadConfig({
+    RATE_LIMIT_ENABLED: "false",
+    RATE_LIMIT_AUTH_MAX: "7",
+    RATE_LIMIT_EXPENSIVE_MAX: "8",
+    RATE_LIMIT_UPLOAD_MAX: "9",
+  });
+  assert.equal(config.rateLimitEnabled, false);
+  assert.equal(config.rateLimitAuthMax, 7);
+  assert.equal(config.rateLimitExpensiveMax, 8);
+  assert.equal(config.rateLimitUploadMax, 9);
+  assert.throws(
+    () => loadConfig({ RATE_LIMIT_ENABLED: "invalid" }),
+    ConfigurationError,
+  );
+  assert.throws(
+    () => loadConfig({ RATE_LIMIT_AUTH_MAX: "0" }),
+    ConfigurationError,
+  );
+});
+
 test("URL-like configuration values use the expected protocols", () => {
   assert.throws(
     () => loadConfig({ API_BASE_URL: "ftp://api.example.com" }),

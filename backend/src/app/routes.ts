@@ -88,6 +88,34 @@ export async function registerRoutes(
     },
     controller.ready,
   );
+  app.get(
+    "/health/live",
+    {
+      schema: {
+        tags: ["system"],
+        response: { 200: { $ref: "LiveResponse#" } },
+      },
+    },
+    controller.live,
+  );
+  app.get(
+    "/health/ready",
+    {
+      schema: {
+        tags: ["system"],
+        response: {
+          200: { $ref: "ReadyResponse#" },
+          503: { $ref: "NotReadyResponse#" },
+        },
+      },
+    },
+    controller.ready,
+  );
+  app.get(
+    "/metrics",
+    { schema: { tags: ["system"] } },
+    async (_request, reply) => reply.type("text/plain; version=0.0.4").send(app.metrics.toPrometheus()),
+  );
 
   app.get(
     API_PREFIX,

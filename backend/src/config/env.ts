@@ -36,10 +36,11 @@ const optionalNumber = (
     z.coerce.number().int().min(minimum).max(maximum).default(defaultValue),
   );
 
-const booleanString = z
-  .enum(["true", "false"])
-  .default("false")
-  .transform((value) => value === "true");
+const booleanString = (defaultValue: "true" | "false" = "false") =>
+  z
+    .enum(["true", "false"])
+    .default(defaultValue)
+    .transform((value) => value === "true");
 
 const rawEnvironmentSchema = z.object({
   NODE_ENV: z
@@ -83,15 +84,19 @@ const rawEnvironmentSchema = z.object({
   LOG_LEVEL: z
     .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
     .default("info"),
-  AUTH_DEV_MODE: booleanString,
+  AUTH_DEV_MODE: booleanString(),
   REQUEST_BODY_LIMIT_BYTES: optionalNumber(1_048_576, 1, 10_485_760),
   FILE_UPLOAD_LIMIT_BYTES: optionalNumber(10_485_760, 1, 52_428_800),
   RATE_LIMIT_MAX: optionalNumber(100, 1, 1_000_000),
   RATE_LIMIT_WINDOW_MS: optionalNumber(60_000, 1, 86_400_000),
+  RATE_LIMIT_ENABLED: booleanString("true"),
+  RATE_LIMIT_AUTH_MAX: optionalNumber(10, 1, 1_000_000),
+  RATE_LIMIT_EXPENSIVE_MAX: optionalNumber(20, 1, 1_000_000),
+  RATE_LIMIT_UPLOAD_MAX: optionalNumber(10, 1, 1_000_000),
   EXTERNAL_REQUEST_TIMEOUT_MS: optionalNumber(10_000, 1, 120_000),
   EXTERNAL_RETRY_LIMIT: optionalNumber(2, 0, 5),
   SHUTDOWN_TIMEOUT_MS: optionalNumber(10_000, 1, 120_000),
-  TRUST_PROXY: booleanString,
+  TRUST_PROXY: booleanString(),
 });
 
 export type EnvironmentName = "development" | "staging" | "production";
@@ -128,6 +133,10 @@ export interface AppConfig {
   fileUploadLimitBytes: number;
   rateLimitMax: number;
   rateLimitWindowMs: number;
+  rateLimitEnabled: boolean;
+  rateLimitAuthMax: number;
+  rateLimitExpensiveMax: number;
+  rateLimitUploadMax: number;
   externalRequestTimeoutMs: number;
   externalRetryLimit: number;
   shutdownTimeoutMs: number;
@@ -266,6 +275,10 @@ export function loadConfig(
     fileUploadLimitBytes: parsed.FILE_UPLOAD_LIMIT_BYTES,
     rateLimitMax: parsed.RATE_LIMIT_MAX,
     rateLimitWindowMs: parsed.RATE_LIMIT_WINDOW_MS,
+    rateLimitEnabled: parsed.RATE_LIMIT_ENABLED,
+    rateLimitAuthMax: parsed.RATE_LIMIT_AUTH_MAX,
+    rateLimitExpensiveMax: parsed.RATE_LIMIT_EXPENSIVE_MAX,
+    rateLimitUploadMax: parsed.RATE_LIMIT_UPLOAD_MAX,
     externalRequestTimeoutMs: parsed.EXTERNAL_REQUEST_TIMEOUT_MS,
     externalRetryLimit: parsed.EXTERNAL_RETRY_LIMIT,
     shutdownTimeoutMs: parsed.SHUTDOWN_TIMEOUT_MS,

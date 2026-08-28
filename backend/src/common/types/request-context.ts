@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppConfig } from "../../config/env.js";
 import type { ReadinessService } from "../lifecycle/readiness.js";
 import type { AuthService } from "../../modules/auth/auth.service.js";
+import type { MetricsRegistry } from "../observability/metrics.js";
 
 export type UserRole =
   "USER" | "ADMIN" | "MODERATOR" | "NUTRITION_EDITOR" | "SUPPORT";
@@ -30,6 +31,7 @@ declare module "fastify" {
     config: AppConfig;
     readiness: ReadinessService;
     authService: AuthService;
+    metrics: MetricsRegistry;
   }
 }
 

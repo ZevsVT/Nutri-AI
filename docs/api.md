@@ -25,6 +25,13 @@ database, or stack-trace details:
 
 ## Endpoint map
 
+Operational endpoints are available outside the versioned API: `GET /health`
+and `GET /health/live` report liveness, while `GET /ready` and
+`GET /health/ready` report readiness with `200` when mandatory checks pass and
+`503` otherwise. `GET /metrics` returns a Prometheus-compatible in-process
+metrics snapshot. Health responses are intentionally coarse; use the returned
+request ID and server logs for diagnosis.
+
 | Endpoint | Auth | Purpose |
 | --- | --- | --- |
 | `GET /foods/search?q=&locale=&page=&pageSize=` | Public | Active canonical food search |

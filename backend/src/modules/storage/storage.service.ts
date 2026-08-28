@@ -18,6 +18,7 @@ import {
   type StorageObjectRecord,
   type StorageObjectRepository,
 } from "./storage.repository.js";
+import type { MetricsRegistry } from "../../common/observability/metrics.js";
 
 export const STORAGE_REFERENCE_PREFIX = "storage://object/";
 
@@ -41,12 +42,17 @@ export interface StorageImageDto {
 
 export class StorageService {
   private cleanupTimer?: NodeJS.Timeout;
+  private metrics?: MetricsRegistry;
 
   constructor(
     private readonly provider: StorageProvider,
     private readonly repository: StorageObjectRepository,
     private readonly config: AppConfig,
   ) {}
+
+  setMetrics(metrics: MetricsRegistry): void {
+    this.metrics = metrics;
+  }
 
   async uploadImage(
     input: UploadImageInput,
@@ -108,6 +114,7 @@ export class StorageService {
         this.config.storageProvider === "s3",
       );
     } catch (error) {
+      this.metrics?.recordDependencyError("storage", "upload");
       await this.provider
         .delete({ key, ownerId: input.ownerId })
         .catch(() => undefined);
@@ -138,8 +145,14 @@ export class StorageService {
     contentType: string;
   }> {
     const record = await this.getForUser(id, ownerId);
-    const content = await this.provider.download(this.reference(record));
-    return { record, bytes: content.bytes, contentType: record.contentType };
+    try {
+      const content = await this.provider.download(this.reference(record));
+      return { record, bytes: content.bytes, contentType: record.contentType };
+    } catch (error) {
+      this.metrics?.recordDependencyError("storage", "download");
+      if (error instanceof AppError) throw error;
+      throw new AppError("STORAGE_ERROR", "Storage read failed", { cause: error });
+    }
   }
 
   async readUrlForUser(
@@ -150,10 +163,17 @@ export class StorageService {
     const record = await this.getForUser(id, ownerId);
     if (this.config.storageProvider !== "s3")
       return { url: applicationReadUrl(record.id), expiresAt: null };
-    const url = await this.provider.getUrl(
-      this.reference(record),
-      this.config.storageReadUrlTtlSeconds,
-    );
+    let url: string;
+    try {
+      url = await this.provider.getUrl(
+        this.reference(record),
+        this.config.storageReadUrlTtlSeconds,
+      );
+    } catch (error) {
+      this.metrics?.recordDependencyError("storage", "get_url");
+      if (error instanceof AppError) throw error;
+      throw new AppError("STORAGE_ERROR", "Storage URL generation failed", { cause: error });
+    }
     return {
       url,
       expiresAt: new Date(
@@ -206,7 +226,13 @@ export class StorageService {
         "INVALID_STATE",
         "Attached meal images follow meal retention policy",
       );
-    await this.provider.delete(this.reference(record));
+    try {
+      await this.provider.delete(this.reference(record));
+    } catch (error) {
+      this.metrics?.recordDependencyError("storage", "delete");
+      if (error instanceof AppError) throw error;
+      throw new AppError("STORAGE_ERROR", "Storage delete failed", { cause: error });
+    }
     await this.repository.markDeleted(record.id, ownerId);
   }
 
@@ -219,6 +245,7 @@ export class StorageService {
         await this.repository.markDeleted(record.id, record.ownerId);
         cleaned += 1;
       } catch (error) {
+        this.metrics?.recordDependencyError("storage", "cleanup");
         logger?.error(
           {
             event: "storage_cleanup_failed",

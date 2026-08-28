@@ -40,7 +40,11 @@ export function createShutdownHandler(
       options.exit?.(0);
     } catch (error) {
       app.log.error(
-        { event: "shutdown_failed", signal, err: error },
+        {
+          event: "shutdown_failed",
+          signal,
+          errorType: error instanceof Error ? error.name : "unknown",
+        },
         "shutdown_failed",
       );
       options.exit?.(1);
