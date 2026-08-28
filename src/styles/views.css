@@ -1,0 +1,970 @@
+/* View Animations */
+.view-container {
+  animation: view-fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ==========================================================================
+   1. DASHBOARD VIEW
+   ========================================================================== */
+.view-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.view-header h2 {
+  font-size: 1.625rem;
+  letter-spacing: -0.04em;
+  margin-bottom: 2px;
+}
+
+.view-header-subtitle {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* Dashboard Hero Banner */
+.dashboard-hero-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #dcecdf 0%, #edf6ee 60%, #e2efe5 100%);
+  border-radius: var(--radius-xl);
+  border: 1px solid #d2e4d4;
+  padding: var(--space-8);
+  margin-bottom: var(--space-6);
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.hero-text-content {
+  position: relative;
+  z-index: 2;
+}
+
+.hero-text-content h3 {
+  font-size: 1.875rem;
+  line-height: 1.15;
+  letter-spacing: -0.05em;
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.hero-text-content h3 em {
+  font-family: "Playfair Display", Georgia, serif;
+  font-style: italic;
+  color: var(--brand-primary);
+}
+
+.hero-text-content p {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  max-width: 380px;
+  margin-bottom: var(--space-5);
+  line-height: 1.5;
+}
+
+.hero-visual-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 220px;
+}
+
+.hero-plate-ring {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 8px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 16px 36px rgba(45, 106, 79, 0.15);
+  position: relative;
+}
+
+.hero-plate-ring img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-floating-chip {
+  position: absolute;
+  top: 15px;
+  right: 10px;
+  background-color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+/* Metric Cards Grid */
+.metric-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.metric-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.metric-card:hover {
+  border-color: var(--border-default);
+  transform: translateY(-1px);
+}
+
+.metric-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.metric-icon-box {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+}
+
+.metric-icon-box--calories { background: var(--nutrient-calories-bg); color: var(--nutrient-calories-text); }
+.metric-icon-box--protein { background: var(--nutrient-protein-bg); color: var(--nutrient-protein-text); }
+.metric-icon-box--fiber { background: var(--nutrient-fiber-bg); color: var(--nutrient-fiber-text); }
+.metric-icon-box--water { background: var(--nutrient-water-bg); color: var(--nutrient-water-text); }
+
+.metric-label-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.metric-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.metric-number {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+.metric-target-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.metric-progress-track {
+  height: 5px;
+  background-color: var(--bg-surface-subtle);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.metric-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width 0.4s ease-out;
+}
+
+.metric-progress-fill--calories { background-color: var(--nutrient-calories-bar); }
+.metric-progress-fill--protein { background-color: var(--nutrient-protein-bar); }
+.metric-progress-fill--fiber { background-color: var(--nutrient-fiber-bar); }
+.metric-progress-fill--water { background-color: var(--nutrient-water-bar); }
+
+/* Dashboard 2-Column Grid */
+.dashboard-content-split {
+  display: grid;
+  grid-template-columns: 1.45fr 0.95fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* Meals List & Items */
+.meals-section-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+}
+
+.meals-list-flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.meal-row-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.meal-row-card:hover {
+  background-color: #f7faf5;
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.meal-thumbnail-box {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+  background-color: var(--border-subtle);
+}
+
+.meal-thumbnail-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.meal-meta-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.meal-header-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--brand-accent);
+  margin-bottom: 2px;
+}
+
+.meal-time-stamp {
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: none;
+}
+
+.meal-title-text {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.meal-ingredients-preview {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meal-nutrients-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.meal-add-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--brand-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background-color: transparent;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.meal-add-action-bar:hover {
+  background-color: var(--brand-primary-subtle);
+  border-color: var(--brand-primary);
+}
+
+/* Side Stack (Habit Tracker & Daily AI Insight) */
+.dashboard-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.ai-insight-box {
+  background: linear-gradient(135deg, #386641 0%, #2f5637 100%);
+  color: #fff;
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(47, 86, 55, 0.2);
+}
+
+.ai-insight-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a7d7b8;
+  margin-bottom: var(--space-3);
+}
+
+.ai-insight-box h4 {
+  font-size: 1.125rem;
+  color: #fff;
+  margin-bottom: var(--space-2);
+}
+
+.ai-insight-box p {
+  color: #d1e5d7;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin-bottom: var(--space-4);
+}
+
+.ai-insight-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.habit-tracker-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+}
+
+.habit-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.habit-item-row:first-of-type {
+  border-top: none;
+}
+
+.habit-icon-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.habit-icon-box {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.habit-icon-box--water { background: var(--nutrient-water-bg); color: var(--nutrient-water-text); }
+.habit-icon-box--plant { background: var(--nutrient-fiber-bg); color: var(--nutrient-fiber-text); }
+
+/* ==========================================================================
+   2. ANALYZE VIEW
+   ========================================================================== */
+.analyze-flow-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 540px;
+  margin: 0 auto var(--space-8);
+  gap: var(--space-3);
+}
+
+.step-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  position: relative;
+}
+
+.step-num-bubble {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-default);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.step-chip--active {
+  color: var(--brand-primary);
+}
+
+.step-chip--active .step-num-bubble {
+  background-color: var(--brand-primary);
+  color: #fff;
+  border-color: var(--brand-primary);
+}
+
+.step-chip--completed .step-num-bubble {
+  background-color: #8bb795;
+  color: #fff;
+  border-color: #8bb795;
+}
+
+.step-divider-line {
+  flex: 1;
+  height: 1px;
+  background-color: var(--border-default);
+  min-width: 30px;
+}
+
+/* Upload / Capture Stage */
+.capture-layout-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.upload-dropzone-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.dropzone-inner {
+  border: 2px dashed #c0d6c3;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #fafcf9 0%, #f4f8f3 100%);
+  padding: var(--space-10) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.dropzone-inner:hover {
+  border-color: var(--brand-accent);
+  background: #f0f7ef;
+}
+
+.dropzone-icon-circle {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  background-color: var(--brand-primary-subtle);
+  color: var(--brand-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.12);
+}
+
+.dropzone-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Processing Stage */
+.scanner-container-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 420px;
+}
+
+.scanner-image-view {
+  position: relative;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  min-height: 380px;
+}
+
+.scanner-laser-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #a7f3d0;
+  box-shadow: 0 0 16px #34d399, 0 0 24px #10b981;
+  animation: laser-scan 2s ease-in-out infinite;
+}
+
+.scanner-overlay-badge {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  background-color: rgba(30, 49, 39, 0.75);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scanner-content-pane {
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.scanner-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.scanner-status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--brand-primary);
+}
+
+.scanner-status-item--pending {
+  color: var(--text-subtle);
+}
+
+/* Review Stage & Detection Correction */
+.review-layout-split {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.reviewed-photo-card {
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  min-height: 420px;
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.bounding-box-label {
+  position: absolute;
+  padding: 4px 8px;
+  background-color: rgba(45, 106, 79, 0.85);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  border-radius: var(--radius-xs);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.bounding-box--beef { top: 38%; left: 32%; }
+.bounding-box--noodles { bottom: 26%; right: 22%; }
+.bounding-box--herbs { bottom: 35%; left: 18%; }
+
+.detected-items-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+
+.detected-row-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.detected-name-box {
+  flex: 1;
+  min-width: 0;
+}
+
+.detected-name-box strong {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.detected-name-box small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Result Stage */
+.result-nutrition-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+}
+
+.result-nutrient-tile {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.result-nutrient-tile span {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.result-nutrient-tile strong {
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   3. FOOD DIARY VIEW
+   ========================================================================== */
+.diary-view-layout {
+  display: grid;
+  grid-template-columns: 1.35fr 0.85fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.diary-timeline-group {
+  margin-bottom: var(--space-6);
+}
+
+.diary-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.diary-group-line {
+  flex: 1;
+  height: 1px;
+  background-color: var(--border-subtle);
+}
+
+/* ==========================================================================
+   4. INSIGHTS & ANALYTICS VIEW
+   ========================================================================== */
+.insights-top-split {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.balance-score-card {
+  background: linear-gradient(135deg, #e5f2e8 0%, #edf6ef 100%);
+  border: 1px solid #cce2d1;
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chart-bar-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.chart-bars-wrap {
+  height: 140px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.chart-single-bar {
+  width: 10px;
+  border-radius: 4px 4px 1px 1px;
+  transition: height 0.3s ease;
+}
+
+.chart-single-bar--protein { background-color: var(--nutrient-protein-bar); }
+.chart-single-bar--fiber { background-color: var(--nutrient-fiber-bar); }
+
+/* ==========================================================================
+   5. AI ASSISTANT VIEW
+   ========================================================================== */
+.assistant-view-split {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.chat-panel-container {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+  overflow: hidden;
+}
+
+.chat-messages-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.chat-bubble-row {
+  display: flex;
+  gap: var(--space-3);
+  max-width: 85%;
+}
+
+.chat-bubble-row--user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.chat-bubble-content {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.chat-bubble-row--assistant .chat-bubble-content {
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-top-left-radius: var(--radius-xs);
+}
+
+.chat-bubble-row--user .chat-bubble-content {
+  background-color: var(--brand-primary-subtle);
+  color: var(--brand-primary-hover);
+  border-top-right-radius: var(--radius-xs);
+}
+
+.chat-input-bar-wrap {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+}
+
+.chat-input-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  padding: 4px 6px 4px var(--space-4);
+}
+
+.chat-input-pill input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   6. RECIPES VIEW
+   ========================================================================== */
+.recipe-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-5);
+}
+
+.recipe-card-single {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.recipe-card-single:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-md);
+}
+
+.recipe-card-cover {
+  height: 180px;
+  overflow: hidden;
+  position: relative;
+}
+
+.recipe-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.recipe-card-body {
+  padding: var(--space-4);
+}
+
+/* ==========================================================================
+   7. PROFILE & SETTINGS VIEW
+   ========================================================================== */
+.profile-view-split {
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.profile-hero-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--space-5);
+}
+
+.profile-settings-group {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.setting-clickable-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+
+.setting-clickable-row:first-of-type {
+  border-top: none;
+}
+
+/* Responsive View Adjustments */
+@media (max-width: 1024px) {
+  .dashboard-content-split,
+  .capture-layout-grid,
+  .review-layout-split,
+  .diary-view-layout,
+  .insights-top-split,
+  .assistant-view-split,
+  .profile-view-split {
+    grid-template-columns: 1fr;
+  }
+  .recipe-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .metric-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .scanner-container-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .metric-cards-grid,
+  .recipe-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-hero-card {
+    grid-template-columns: 1fr;
+    padding: var(--space-5);
+  }
+  .hero-visual-container {
+    display: none;
+  }
+  .result-nutrition-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

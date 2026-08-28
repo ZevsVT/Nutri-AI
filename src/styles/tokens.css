@@ -1,0 +1,105 @@
+:root {
+  /* Semantic Brand & Canvas */
+  --bg-app: #f6f8f4;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #ffffff;
+  --bg-surface-subtle: #f0f4ee;
+  --bg-surface-muted: #e7eee5;
+  --bg-overlay: rgba(18, 30, 23, 0.55);
+
+  /* Primary Brand: Forest & Vibrant Sage */
+  --brand-primary: #1f6346;
+  --brand-primary-hover: #174e36;
+  --brand-primary-active: #0f3726;
+  --brand-primary-subtle: #e6f3eb;
+  --brand-primary-border: #bcdcc7;
+  --brand-accent: #38a169;
+  --brand-glow: rgba(56, 161, 105, 0.25);
+
+  /* Typography / Inks */
+  --text-primary: #182b21;
+  --text-secondary: #3d5045;
+  --text-muted: #677b70;
+  --text-subtle: #8ea096;
+  --text-on-primary: #ffffff;
+
+  /* Borders & Dividers */
+  --border-subtle: #e4ebe1;
+  --border-default: #d3dfcf;
+  --border-strong: #b8ccb3;
+  --border-focus: rgba(31, 99, 70, 0.4);
+
+  /* Nutrition Semantic Color Tokens */
+  --nutrient-calories-bg: #f3edfc;
+  --nutrient-calories-text: #6b3fb8;
+  --nutrient-calories-bar: #8e5bd6;
+  --nutrient-calories-glow: rgba(142, 91, 214, 0.25);
+
+  --nutrient-protein-bg: #fff0e6;
+  --nutrient-protein-text: #ad4e1b;
+  --nutrient-protein-bar: #e06d34;
+  --nutrient-protein-glow: rgba(224, 109, 52, 0.25);
+
+  --nutrient-carbs-bg: #eaf5fc;
+  --nutrient-carbs-text: #216a94;
+  --nutrient-carbs-bar: #389cd4;
+  --nutrient-carbs-glow: rgba(56, 156, 212, 0.25);
+
+  --nutrient-fat-bg: #fdf5e3;
+  --nutrient-fat-text: #966b10;
+  --nutrient-fat-bar: #dca024;
+  --nutrient-fat-glow: rgba(220, 160, 36, 0.25);
+
+  --nutrient-fiber-bg: #e6f6ec;
+  --nutrient-fiber-text: #1d7345;
+  --nutrient-fiber-bar: #2da464;
+  --nutrient-fiber-glow: rgba(45, 164, 100, 0.25);
+
+  --nutrient-water-bg: #e8f3fc;
+  --nutrient-water-text: #1f6ba3;
+  --nutrient-water-bar: #3290d6;
+  --nutrient-water-glow: rgba(50, 144, 214, 0.25);
+
+  /* Status Colors */
+  --status-success-bg: #e8f8ed;
+  --status-success-text: #186e38;
+  --status-warning-bg: #fef6e8;
+  --status-warning-text: #945d14;
+  --status-danger-bg: #fdf0f0;
+  --status-danger-text: #b92e2e;
+  --status-ai-bg: #eff8f3;
+  --status-ai-text: #1f6346;
+
+  /* Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 3px rgba(24, 43, 33, 0.04);
+  --shadow-sm: 0 3px 8px rgba(24, 43, 33, 0.06);
+  --shadow-md: 0 8px 20px rgba(24, 43, 33, 0.08);
+  --shadow-lg: 0 14px 36px rgba(24, 43, 33, 0.1);
+  --shadow-elevated: 0 24px 56px rgba(24, 43, 33, 0.14), 0 4px 12px rgba(24, 43, 33, 0.05);
+
+  /* Transitions & Motion */
+  --transition-fast: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-spring: 450ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
