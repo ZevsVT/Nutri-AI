@@ -36,6 +36,8 @@ import { StorageController } from "../modules/storage/storage.controller.js";
 import { InMemoryStorageObjectRepository, type StorageObjectRepository } from "../modules/storage/storage.repository.js";
 import { StorageService, createStorageProvider } from "../modules/storage/storage.service.js";
 import type { StorageProvider } from "../integrations/storage/storage-provider.js";
+import { MetricsRegistry, metricRoute } from "../common/observability/metrics.js";
+import { rateLimitCategory, rateLimitMax, routePath } from "../common/observability/rate-limit.js";
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -75,7 +77,8 @@ export async function buildApp(
       requestIdFromHeaders(request.headers) ?? `req_${randomUUID()}`,
     logController: new LogController({ disableRequestLogging: true }),
   });
-  const readiness = new ReadinessService(options.readinessChecks, app.log);
+  const metrics = new MetricsRegistry();
+  const readiness = new ReadinessService(options.readinessChecks, app.log, metrics);
   const storageService = options.storageService ?? new StorageService(
     options.storageProvider ?? createStorageProvider(config),
     options.storageObjectRepository ?? new InMemoryStorageObjectRepository(),
@@ -84,6 +87,8 @@ export async function buildApp(
 
   app.decorate("config", config);
   app.decorate("readiness", readiness);
+  app.decorate("metrics", metrics);
+  storageService.setMetrics(metrics);
   app.decorate(
     "authService",
     new AuthService(
@@ -111,10 +116,17 @@ export async function buildApp(
     limits: { fileSize: config.fileUploadLimitBytes, files: 1, parts: 10 },
   });
   await app.register(rateLimit, {
-    global: true,
+    global: config.rateLimitEnabled,
+    hook: "preHandler",
     allowList: (request) =>
-      request.url === "/health" || request.url === "/ready",
-    max: config.rateLimitMax,
+      ["/health", "/ready", "/health/live", "/health/ready", "/metrics"].includes(
+        routePath(request.url),
+      ),
+    // Authentication is a route pre-handler, so private requests are keyed
+    // by the server-resolved user ID before this hook runs. Anonymous routes
+    // use Fastify's proxy-aware IP, which only honors forwarded headers when
+    // TRUST_PROXY is explicitly enabled.
+    max: (request) => rateLimitMax(config, request.url),
     timeWindow: config.rateLimitWindowMs,
     keyGenerator: (request) => request.user?.id ?? request.ip,
     errorResponseBuilder: (request) => ({
@@ -123,13 +135,19 @@ export async function buildApp(
       requestId: request.id,
     }),
     onExceeded: (request) => {
+      const route = metricRoute(request.routeOptions.url ?? routePath(request.url));
+      const limiterCategory = rateLimitCategory(route);
+      metrics.recordRateLimitRejection(route, request.method);
       request.log.warn(
         {
-          event: "rate_limit_exceeded",
+          event: "rate_limit_rejected",
           requestId: request.id,
-          route: request.url.split("?")[0],
+          route,
+          method: request.method,
+          limiterCategory,
+          statusCode: 429,
         },
-        "rate_limit_exceeded",
+        "rate_limit_rejected",
       );
     },
   });
@@ -176,6 +194,11 @@ export async function buildApp(
               service: { type: "string" },
               version: { type: "string" },
             },
+          },
+          LiveResponse: {
+            type: "object",
+            required: ["status"],
+            properties: { status: { type: "string", enum: ["ok"] } },
           },
           ReadyResponse: {
             type: "object",
@@ -255,6 +278,12 @@ export async function buildApp(
       service: { type: "string" },
       version: { type: "string" },
     },
+  });
+  app.addSchema({
+    $id: "LiveResponse",
+    type: "object",
+    required: ["status"],
+    properties: { status: { type: "string", enum: ["ok"] } },
   });
   app.addSchema({
     $id: "ReadyResponse",
@@ -403,20 +432,23 @@ export async function buildApp(
         event: "request_received",
         requestId: request.id,
         method: request.method,
-        route: request.url.split("?")[0],
+        route: metricRoute(request.routeOptions.url ?? routePath(request.url)),
       },
       "request_received",
     );
   });
   app.addHook("onResponse", async (request, reply) => {
+    const route = metricRoute(request.routeOptions.url);
+    const durationMs = Math.round(performance.now() - request.startedAt);
+    metrics.recordHttpRequest(request.method, route, reply.statusCode, durationMs);
     request.log.info(
       {
         event: "request_completed",
         requestId: request.id,
         method: request.method,
-        route: request.routeOptions.url ?? request.url.split("?")[0],
+        route,
         statusCode: reply.statusCode,
-        durationMs: Math.round(performance.now() - request.startedAt),
+        durationMs,
       },
       "request_completed",
     );

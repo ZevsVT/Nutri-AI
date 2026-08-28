@@ -6,6 +6,21 @@ export function createLoggerOptions(
 ): FastifyServerOptions["logger"] {
   return {
     level: config.logLevel,
+    redact: {
+      paths: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        "req.body",
+        "body.password",
+        "body.token",
+        "password",
+        "accessToken",
+        "refreshToken",
+        "apiKey",
+        "signedUrl",
+      ],
+      censor: "[Redacted]",
+    },
     serializers: {
       req: (request) => ({
         method: request.method,

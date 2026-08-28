@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { AppError, type ErrorCode } from "./app-error.js";
+import { AppError, ExternalServiceError, type ErrorCode } from "./app-error.js";
+import { metricRoute } from "../observability/metrics.js";
 
 interface FastifyErrorLike {
   code?: string;
@@ -111,7 +112,7 @@ export function installErrorHandling(app: FastifyInstance): void {
         event: "route_not_found",
         requestId,
         method: request.method,
-        route: request.url.split("?")[0],
+        route: "unmatched",
       },
       "route_not_found",
     );
@@ -129,11 +130,27 @@ export function installErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
     const normalized = normalizeError(error);
     const requestId = request.id;
+    const dependency =
+      normalized instanceof ExternalServiceError
+        ? normalized.provider
+        : normalized.code === "STORAGE_ERROR"
+          ? "storage"
+          : normalized.code === "DATABASE_ERROR"
+            ? "database"
+            : undefined;
     request.log.error(
       {
         event: "request_failed",
         requestId,
+        method: request.method,
+        route: metricRoute(request.routeOptions.url),
         errorCode: normalized.code,
+        errorType: normalized.name,
+        statusCode: normalized.statusCode,
+        durationMs: request.startedAt
+          ? Math.round(performance.now() - request.startedAt)
+          : undefined,
+        ...(dependency ? { dependency } : {}),
         error: {
           name: normalized.name,
           code: normalized.code,

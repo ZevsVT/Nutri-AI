@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import type { FastifyBaseLogger } from "fastify";
+import type { MetricsRegistry } from "../../common/observability/metrics.js";
 
 interface PrismaGlobalState {
   client?: PrismaClient;
@@ -48,6 +49,7 @@ export function createPrismaClient(
 
 export class PrismaDatabase implements DatabaseClient {
   private logger?: FastifyBaseLogger;
+  private metrics?: MetricsRegistry;
 
   constructor(
     public readonly client: PrismaClient,
@@ -76,7 +78,12 @@ export class PrismaDatabase implements DatabaseClient {
     this.logger = logger;
   }
 
+  setMetrics(metrics: MetricsRegistry): void {
+    this.metrics = metrics;
+  }
+
   private logConnectionFailure(error: unknown): void {
+    this.metrics?.recordDependencyError("database", "ping");
     this.logger?.error(
       {
         event: "database_error",

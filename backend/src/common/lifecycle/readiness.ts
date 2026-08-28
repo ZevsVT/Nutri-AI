@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from "fastify";
+import type { MetricsRegistry } from "../observability/metrics.js";
 
 export interface ReadinessCheck {
   name: string;
@@ -8,6 +9,7 @@ export interface ReadinessCheck {
 export interface ReadinessResult {
   ready: boolean;
   failedChecks: string[];
+  dependencies: Record<string, "ok" | "unavailable">;
 }
 
 export class ReadinessService {
@@ -16,6 +18,7 @@ export class ReadinessService {
   constructor(
     private readonly checks: readonly ReadinessCheck[] = [],
     private readonly logger?: FastifyBaseLogger,
+    private readonly metrics?: MetricsRegistry,
   ) {}
 
   markInitialized(): void {
@@ -24,9 +27,13 @@ export class ReadinessService {
 
   async check(): Promise<ReadinessResult> {
     const failures: string[] = [];
+    const dependencies: Record<string, "ok" | "unavailable"> = {};
 
     if (!this.initialized) {
       failures.push("application");
+      dependencies.application = "unavailable";
+    } else {
+      dependencies.application = "ok";
     }
 
     const results = await Promise.all(
@@ -43,7 +50,12 @@ export class ReadinessService {
             },
             "readiness_check_failed",
           );
+          this.metrics?.recordDependencyError(dependency.name, "readiness");
+          dependencies[dependency.name] = "unavailable";
           return dependency.name;
+        }
+        finally {
+          if (!(dependency.name in dependencies)) dependencies[dependency.name] = "ok";
         }
       }),
     );
@@ -54,6 +66,6 @@ export class ReadinessService {
       }
     }
 
-    return { ready: failures.length === 0, failedChecks: failures };
+    return { ready: failures.length === 0, failedChecks: failures, dependencies };
   }
 }

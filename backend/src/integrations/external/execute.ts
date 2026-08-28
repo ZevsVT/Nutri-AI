@@ -3,6 +3,7 @@ import { ExternalServiceError } from "../../common/errors/app-error.js";
 import { logExternalFailure } from "../../common/logging/events.js";
 import { withRetry } from "./retry.js";
 import { withTimeout } from "./timeout.js";
+import type { MetricsRegistry } from "../../common/observability/metrics.js";
 
 export interface ExternalOperationOptions {
   provider: string;
@@ -14,6 +15,7 @@ export interface ExternalOperationOptions {
   userId?: string;
   signal?: AbortSignal;
   logger?: FastifyBaseLogger;
+  metrics?: MetricsRegistry;
 }
 
 export async function executeExternal<T>(
@@ -72,6 +74,7 @@ export async function executeExternal<T>(
         error,
       );
     }
+    options.metrics?.recordDependencyError(options.provider, options.operation);
     throw error;
   }
 }

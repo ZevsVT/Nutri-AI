@@ -11,6 +11,10 @@ export class SystemController {
     return reply.send(this.service.getHealth());
   };
 
+  live = async (_request: FastifyRequest, reply: FastifyReply) => {
+    return reply.send({ status: "ok" as const });
+  };
+
   ready = async (_request: FastifyRequest, reply: FastifyReply) => {
     const readiness = await this.service.getReadiness();
     if (readiness.status !== "ready") {

@@ -43,6 +43,7 @@ try {
   throw error;
 }
 database?.setLogger(app.log);
+database?.setMetrics(app.metrics);
 const removeSignalHandlers = installSignalHandlers(app, {
   timeoutMs: config.shutdownTimeoutMs,
   cleanup: closeDatabase,
@@ -52,12 +53,26 @@ const removeSignalHandlers = installSignalHandlers(app, {
 try {
   await app.listen({ port: config.port, host: "0.0.0.0" });
   app.log.info(
-    { event: "server_started", service: "nutri-ai-api", port: config.port },
+    {
+      event: "server_started",
+      service: "nutri-ai-api",
+      environment: config.nodeEnv,
+      port: config.port,
+      apiVersion: "v1",
+      databaseConfigured: Boolean(config.databaseUrl),
+      storageProvider: config.storageProvider,
+      aiProvider: config.aiProvider,
+      nutritionProvider: config.nutritionProvider,
+      rateLimitEnabled: config.rateLimitEnabled,
+    },
     "server_started",
   );
 } catch (error) {
   app.log.error(
-    { event: "server_failed_to_start", err: error },
+    {
+      event: "server_failed_to_start",
+      errorType: error instanceof Error ? error.name : "unknown",
+    },
     "server_failed_to_start",
   );
   removeSignalHandlers();
