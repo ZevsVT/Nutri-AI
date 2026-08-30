@@ -10,7 +10,7 @@ capture → confirm → understand flow.
 | Prototype concept | Database entity | Future API usage |
 | --- | --- | --- |
 | Account and profile | `User`, `UserPreference`, `UserConsent`, `Session`, `PasswordResetToken` | Issue #8 authentication and profile/privacy endpoints |
-| Searchable Vietnamese food | `Food`, `FoodAlias` | `GET /api/foods/search` |
+| Searchable Vietnamese food | `Food`, `FoodAlias`, `FoodComponent` | `GET /api/foods/search` |
 | Nutrition provenance | `FoodSource`, `NutritionVersion`, `FoodNutrition` | Food lookup and calculation services |
 | Captured diary event | `Meal`, `MealItem` | Meal CRUD and diary endpoints |
 | Confirmed nutrition | `MealItemNutrition`, `NutritionAnalysis` | Analysis confirmation and daily totals |
@@ -26,7 +26,11 @@ versioned food source and is copied into `MealItemNutrition`.
 ## Relationships and historical behavior
 
 ```text
-Food ──< FoodNutrition >── NutritionVersion ──> FoodSource
+Food ──< FoodAlias
+  │
+  ├──< FoodComponent >── Food (ingredient)
+  │
+  └──< FoodNutrition >── NutritionVersion ──> FoodSource
   │
   └──< MealItem ──> Meal ──> User
               │
@@ -82,7 +86,8 @@ runs `prisma migrate deploy`). Never point `migrate dev` at production.
 The committed migrations are
 `20260825200000_init_nutrition_schema`,
 `20260825210000_add_authentication`, and
-`20260825220000_add_secure_storage`.
+`20260825220000_add_secure_storage`, and
+`20260830220000_add_food_taxonomy`.
 
 ## Seed data
 
@@ -93,9 +98,9 @@ one confirmed phở bò meal with an immutable snapshot, a demo AI prediction, a
 insight, and a minimal published recipe. It does not create real production
 accounts.
 
-Aliases store both display text and a normalized form. The seed normalizer
-lowercases, trims, collapses whitespace, and removes Vietnamese diacritics so
-accent-insensitive lookup can be implemented by the future search service.
+Aliases store both display text and a normalized form. The taxonomy seed adds
+controlled metadata and identity-only foods where no reviewed nutrition source
+is available. See [`food-taxonomy.md`](food-taxonomy.md) for contribution rules.
 
 ## Connection management and repositories
 
