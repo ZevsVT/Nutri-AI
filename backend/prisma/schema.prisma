@@ -66,6 +66,13 @@ enum NutritionAnalysisStatus {
   FAILED
 }
 
+enum NutritionMappingType {
+  EXACT_MATCH
+  CLOSE_MATCH
+  DERIVED_ESTIMATE
+  UNAVAILABLE
+}
+
 enum AIAnalysisStatus {
   PENDING
   RUNNING
@@ -316,6 +323,7 @@ model FoodNutrition {
   sugar              Decimal  @db.Decimal(12, 3)
   sodium             Decimal  @db.Decimal(12, 3)
   confidence         Decimal? @db.Decimal(4, 3)
+  mappingType        NutritionMappingType @default(EXACT_MATCH)
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
