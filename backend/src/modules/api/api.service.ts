@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { AppError } from "../../common/errors/app-error.js";
 import { NoopBarcodeProvider, type BarcodeProvider } from "../../integrations/barcode/barcode-provider.js";
 import type { StorageService } from "../storage/storage.service.js";
+import { normalizeFoodText } from "../foods/food-taxonomy.js";
 
 export interface NutritionTotals {
   calories: number;
@@ -18,6 +19,13 @@ export interface FoodDto {
   name: { vi: string; en: string | null };
   category: string | null;
   cuisine: string | null;
+  slug?: string | null;
+  foodType?: string | null;
+  subcategory?: string | null;
+  region?: string | null;
+  cookingMethod?: string | null;
+  servingUnit?: string | null;
+  defaultServingSize?: number | null;
   nutrition?: Record<string, unknown>;
 }
 
@@ -121,9 +129,9 @@ export class InMemoryBusinessApiService implements BusinessApiService {
   private readonly water: Array<Record<string, unknown> & { userId: string; loggedAt: Date }> = [];
 
   async searchFoods({ query, page, pageSize }: { query: string; locale: string; page: number; pageSize: number }) {
-    const value = query.trim().toLocaleLowerCase();
+    const value = normalizeFoodText(query);
     if (!value) return { data: [], total: 0 };
-    const found = this.foods.filter((food) => [food.name.vi, food.name.en ?? "", food.id, ...food.aliases].some((field) => field.toLocaleLowerCase().includes(value)));
+    const found = this.foods.filter((food) => [food.name.vi, food.name.en ?? "", food.id, ...food.aliases].some((field) => normalizeFoodText(field).includes(value)));
     return { data: pageOf(found, page, pageSize).map((food) => this.publicFood(food)), total: found.length };
   }
 
@@ -213,7 +221,8 @@ export class PrismaBusinessApiService implements BusinessApiService {
 
   async searchFoods({ query, page, pageSize }: { query: string; locale: string; page: number; pageSize: number }) {
     if (!query.trim()) return { data: [], total: 0 };
-    const where = { isActive: true, OR: [{ canonicalName: { contains: query, mode: "insensitive" as const } }, { nameVi: { contains: query, mode: "insensitive" as const } }, { nameEn: { contains: query, mode: "insensitive" as const } }, { aliases: { some: { alias: { contains: query, mode: "insensitive" as const } } } }] };
+    const normalized = normalizeFoodText(query);
+    const where = { isActive: true, OR: [{ canonicalName: { contains: query, mode: "insensitive" as const } }, { normalizedName: { contains: normalized, mode: "insensitive" as const } }, { nameVi: { contains: query, mode: "insensitive" as const } }, { nameEn: { contains: query, mode: "insensitive" as const } }, { aliases: { some: { OR: [{ alias: { contains: query, mode: "insensitive" as const } }, { normalizedAlias: { contains: normalized, mode: "insensitive" as const } }] } } }] };
     const [rows, total] = await this.prisma.$transaction([this.prisma.food.findMany({ where, orderBy: { nameVi: "asc" }, skip: (page - 1) * pageSize, take: pageSize, include: { aliases: true } }), this.prisma.food.count({ where })]);
     return { data: rows.map((food) => this.foodDto(food)), total };
   }
@@ -325,8 +334,8 @@ export class PrismaBusinessApiService implements BusinessApiService {
   async listInsights(userId: string, { page, pageSize }: { page: number; pageSize: number }) { const where = { userId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }; const [rows, total] = await this.prisma.$transaction([this.prisma.nutritionInsight.findMany({ where, orderBy: { periodStart: "desc" }, skip: (page - 1) * pageSize, take: pageSize }), this.prisma.nutritionInsight.count({ where })]); return { data: rows, total }; }
   async scanBarcode(_userId: string, barcode: string) { const product = await this.barcodeProvider.lookup(barcode); return { barcode, status: product ? "RESOLVED" : "UNRESOLVED", product, source: product?.source ?? null }; }
 
-  private foodDto(food: { id: string; nameVi: string; nameEn: string | null; category: string | null; cuisine: string | null; nutritionRecords?: readonly NutritionRecordLike[] }, includeNutrition = false): FoodDto {
-    const dto: FoodDto = { id: food.id, name: { vi: food.nameVi, en: food.nameEn }, category: food.category, cuisine: food.cuisine };
+  private foodDto(food: { id: string; slug?: string | null; nameVi: string; nameEn: string | null; category: string | null; cuisine: string | null; foodType?: string | null; subcategory?: string | null; region?: string | null; cookingMethod?: string | null; servingUnit?: string | null; defaultServingSize?: unknown; nutritionRecords?: readonly NutritionRecordLike[] }, includeNutrition = false): FoodDto {
+    const dto: FoodDto = { id: food.id, slug: food.slug, name: { vi: food.nameVi, en: food.nameEn }, category: food.category, cuisine: food.cuisine, foodType: food.foodType, subcategory: food.subcategory, region: food.region, cookingMethod: food.cookingMethod, servingUnit: food.servingUnit, defaultServingSize: food.defaultServingSize == null ? null : Number(food.defaultServingSize) };
     if (includeNutrition && food.nutritionRecords?.length) { const record = this.latestNutrition(food.nutritionRecords); if (record) dto.nutrition = { servingAmount: Number(record.servingAmount), servingUnit: record.servingUnit, calories: Number(record.calories), protein: Number(record.protein), carbohydrates: Number(record.carbohydrates), fat: Number(record.fat), fiber: Number(record.fiber), source: record.nutritionVersion.source.name, provider: record.nutritionVersion.source.provider, version: record.nutritionVersion.version }; }
     return dto;
   }

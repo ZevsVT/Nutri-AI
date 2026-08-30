@@ -201,12 +201,20 @@ model UserConsent {
 model Food {
   id            String   @id @default(uuid()) @db.Uuid
   canonicalName String   @unique @db.VarChar(160)
+  slug          String?  @unique @db.VarChar(160)
+  normalizedName String? @unique @db.VarChar(160)
   nameVi        String   @db.VarChar(160)
   nameEn        String?  @db.VarChar(160)
   description   String?  @db.Text
   category      String?  @db.VarChar(100)
+  subcategory   String?  @db.VarChar(100)
   cuisine       String?  @db.VarChar(100)
   foodType      String?  @db.VarChar(100)
+  region        String?  @db.VarChar(32)
+  cookingMethod String?  @db.VarChar(32)
+  servingUnit   String?  @db.VarChar(32)
+  defaultServingSize Decimal? @db.Decimal(12, 3)
+  status        String   @default("ACTIVE") @db.VarChar(24)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
@@ -218,9 +226,30 @@ model Food {
   recipeIngredients    RecipeIngredient[]
   originalCorrections  AICorrection[]     @relation("AICorrectionOriginalFood")
   correctedCorrections AICorrection[]     @relation("AICorrectionCorrectedFood")
+  components           FoodComponent[]    @relation("FoodComponents")
+  componentOf          FoodComponent[]    @relation("FoodComponentOf")
 
   @@index([nameVi])
+  @@index([foodType])
+  @@index([category])
+  @@index([region])
+  @@index([status])
   @@index([isActive])
+}
+
+model FoodComponent {
+  id              String   @id @default(uuid()) @db.Uuid
+  foodId          String   @db.Uuid
+  componentFoodId String   @db.Uuid
+  quantity        Decimal? @db.Decimal(12, 3)
+  unit            String?  @db.VarChar(32)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  food          Food @relation("FoodComponents", fields: [foodId], references: [id], onDelete: Cascade)
+  componentFood Food @relation("FoodComponentOf", fields: [componentFoodId], references: [id], onDelete: Restrict)
+
+  @@unique([foodId, componentFoodId])
+  @@index([componentFoodId])
 }
 
 model FoodAlias {
@@ -286,6 +315,7 @@ model FoodNutrition {
   fiber              Decimal  @db.Decimal(12, 3)
   sugar              Decimal  @db.Decimal(12, 3)
   sodium             Decimal  @db.Decimal(12, 3)
+  confidence         Decimal? @db.Decimal(4, 3)
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 

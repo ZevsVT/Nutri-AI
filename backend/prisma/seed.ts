@@ -13,6 +13,7 @@ import {
   RecipeStatus,
   UserRole,
 } from "@prisma/client";
+import { normalizeFoodText, slugifyFoodName } from "../src/modules/foods/food-taxonomy.js";
 
 const prisma = new PrismaClient();
 
@@ -22,7 +23,24 @@ const curatedVersionId = "00000000-0000-0000-0000-000000000111";
 const usdaSourceId = "00000000-0000-0000-0000-000000000120";
 const usdaVersionId = "00000000-0000-0000-0000-000000000121";
 
-const foodDefinitions = [
+interface FoodDefinition {
+  id: string;
+  canonicalName: string;
+  nameVi: string;
+  nameEn: string;
+  category: string;
+  cuisine: string;
+  foodType: string;
+  aliases: string[];
+  nutrition?: readonly [number, number, number, number, number, number, number];
+  subcategory?: string;
+  region?: string;
+  cookingMethod?: string;
+  servingUnit?: string;
+  defaultServingSize?: number;
+}
+
+const foodDefinitions: FoodDefinition[] = [
   {
     id: "00000000-0000-0000-0000-000000000201",
     canonicalName: "pho-bo",
@@ -155,16 +173,63 @@ const foodDefinitions = [
     aliases: ["cháo", "chao", "rice porridge"],
     nutrition: [280, 14, 38, 7, 1, 2, 520],
   },
-] as const;
+] ;
+
+// Identity-only records intentionally carry no nutrition values. Nutrition is
+// added only when backed by a reviewed source/version.
+const additionalFoodDefinitions: FoodDefinition[] = [
+  ["gao", "Gạo", "Rice", "STAPLE", "INGREDIENT", "RAW"],
+  ["thit-bo", "Thịt bò", "Beef", "MEAT", "INGREDIENT", "RAW"],
+  ["thit-ga", "Thịt gà", "Chicken", "POULTRY", "INGREDIENT", "RAW"],
+  ["ca-loc", "Cá lóc", "Snakehead fish", "SEAFOOD", "INGREDIENT", "RAW"],
+  ["ca-kho-to", "Cá kho tộ", "Caramelized fish in clay pot", "SEAFOOD", "DISH", "BRAISED"],
+  ["ga-luoc", "Gà luộc", "Boiled chicken", "POULTRY", "DISH", "BOILED"],
+  ["ga-nuong", "Gà nướng", "Grilled chicken", "POULTRY", "DISH", "GRILLED"],
+  ["thit-kho", "Thịt kho", "Vietnamese braised pork", "MEAT", "DISH", "BRAISED"],
+  ["canh-chua", "Canh chua", "Sour soup", "SOUP", "DISH", "SIMMERED"],
+  ["rau-muong", "Rau muống", "Water spinach", "VEGETABLES", "INGREDIENT", "RAW"],
+  ["rau-muong-xao-toi", "Rau muống xào tỏi", "Stir-fried morning glory with garlic", "VEGETABLES", "DISH", "STIR_FRIED"],
+  ["dau-hu", "Đậu hũ", "Tofu", "PLANT_PROTEIN", "INGREDIENT", "STEAMED"],
+  ["dau-hu-chien", "Đậu hũ chiên", "Fried tofu", "PLANT_PROTEIN", "DISH", "FRIED"],
+  ["chuoi", "Chuối", "Banana", "FRUITS", "INGREDIENT", "RAW"],
+  ["xoai", "Xoài", "Mango", "FRUITS", "INGREDIENT", "RAW"],
+  ["cha-gio", "Chả giò", "Vietnamese fried spring roll", "SNACK", "SNACK", "FRIED"],
+  ["banh-cuon", "Bánh cuốn", "Steamed rice rolls", "SNACK", "DISH", "STEAMED"],
+  ["che", "Chè", "Vietnamese sweet soup", "DESSERT", "DESSERT", "SIMMERED"],
+  ["ca-phe-sua-da", "Cà phê sữa đá", "Vietnamese iced coffee with condensed milk", "BEVERAGE", "BEVERAGE", "OTHER"],
+  ["nuoc-mia", "Nước mía", "Sugarcane juice", "BEVERAGE", "BEVERAGE", "OTHER"],
+  ["nuoc-mam", "Nước mắm", "Fish sauce", "CONDIMENT", "CONDIMENT", "FERMENTED"],
+  ["tuong-ot", "Tương ớt", "Chili sauce", "CONDIMENT", "CONDIMENT", "OTHER"],
+  ["mi-quang", "Mì Quảng", "Quang-style noodles", "NOODLES", "DISH", "SIMMERED"],
+  ["hu-tieu", "Hủ tiếu", "Southern Vietnamese noodle soup", "NOODLES", "DISH", "SIMMERED"],
+  ["banh-canh", "Bánh canh", "Thick tapioca noodle soup", "NOODLES", "DISH", "SIMMERED"],
+  ["banh-trang", "Bánh tráng", "Rice paper", "STAPLE", "INGREDIENT", "DRIED"],
+  ["sua-chua-dong-hop", "Sữa chua đóng hộp", "Packaged yogurt", "PACKAGED_FOOD", "PACKAGED_FOOD", "OTHER"],
+].map(([slug, nameVi, nameEn, category, foodType, cookingMethod], index) => ({
+  id: `00000000-0000-0000-0000-0000000003${String(index + 1).padStart(2, "0")}`,
+  canonicalName: slug,
+  nameVi,
+  nameEn,
+  category,
+  cuisine: "Vietnamese",
+  foodType,
+  aliases: [slug.replace(/-/g, " "), nameEn.toLowerCase()],
+  region: "NATIONWIDE",
+  cookingMethod,
+  servingUnit: "SERVING",
+  defaultServingSize: 1,
+}));
 
 function normalizeAlias(alias: string): string {
-  return alias
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ");
+  return normalizeFoodText(alias);
 }
+
+const categoryMap: Record<string, string> = {
+  "noodle soup": "NOODLES", "rice noodle": "NOODLES", "rice plate": "RICE",
+  "rice dish": "RICE", "rice porridge": "RICE", sandwich: "STAPLE",
+  "fresh roll": "SNACK", "savory pancake": "SNACK",
+};
+const foodTypeMap: Record<string, string> = { "main dish": "DISH", "side dish": "DISH", breakfast: "MEAL" };
 
 async function main(): Promise<void> {
   await prisma.$transaction(async (transaction) => {
@@ -229,26 +294,41 @@ async function main(): Promise<void> {
     });
 
     const foods = new Map<string, { id: string; nameVi: string }>();
-    for (const definition of foodDefinitions) {
+    for (const definition of [...foodDefinitions, ...additionalFoodDefinitions]) {
       const food = await transaction.food.upsert({
         where: { id: definition.id },
         update: {
           canonicalName: definition.canonicalName,
+          slug: slugifyFoodName(definition.nameVi),
+          normalizedName: normalizeFoodText(definition.nameVi),
           nameVi: definition.nameVi,
           nameEn: definition.nameEn,
-          category: definition.category,
+          category: categoryMap[definition.category] ?? definition.category,
+          subcategory: definition.subcategory ?? definition.category,
           cuisine: definition.cuisine,
-          foodType: definition.foodType,
+          foodType: foodTypeMap[definition.foodType] ?? definition.foodType,
+          region: definition.region ?? "NATIONWIDE",
+          cookingMethod: definition.cookingMethod ?? "OTHER",
+          servingUnit: definition.servingUnit ?? "SERVING",
+          defaultServingSize: definition.defaultServingSize ?? 1,
+          status: "ACTIVE",
           isActive: true,
         },
         create: {
           id: definition.id,
           canonicalName: definition.canonicalName,
+          slug: slugifyFoodName(definition.nameVi),
+          normalizedName: normalizeFoodText(definition.nameVi),
           nameVi: definition.nameVi,
           nameEn: definition.nameEn,
-          category: definition.category,
+          category: categoryMap[definition.category] ?? definition.category,
+          subcategory: definition.subcategory ?? definition.category,
           cuisine: definition.cuisine,
-          foodType: definition.foodType,
+          foodType: foodTypeMap[definition.foodType] ?? definition.foodType,
+          region: definition.region ?? "NATIONWIDE",
+          cookingMethod: definition.cookingMethod ?? "OTHER",
+          servingUnit: definition.servingUnit ?? "SERVING",
+          defaultServingSize: definition.defaultServingSize ?? 1,
         },
       });
       foods.set(definition.canonicalName, { id: food.id, nameVi: food.nameVi });
@@ -271,8 +351,8 @@ async function main(): Promise<void> {
         });
       }
 
-      const [calories, protein, carbohydrates, fat, fiber, sugar, sodium] =
-        definition.nutrition;
+      if (!definition.nutrition) continue;
+      const [calories, protein, carbohydrates, fat, fiber, sugar, sodium] = definition.nutrition;
       await transaction.foodNutrition.upsert({
         where: {
           foodId_nutritionVersionId: {
@@ -304,6 +384,23 @@ async function main(): Promise<void> {
           sugar,
           sodium,
         },
+      });
+    }
+
+    const componentLinks = [
+      ["com-tam", "gao"],
+      ["com-ga", "thit-ga"],
+      ["pho-bo", "thit-bo"],
+      ["canh-chua", "ca-loc"],
+    ] as const;
+    for (const [foodName, componentName] of componentLinks) {
+      const food = foods.get(foodName);
+      const component = foods.get(componentName);
+      if (!food || !component) continue;
+      await transaction.foodComponent.upsert({
+        where: { foodId_componentFoodId: { foodId: food.id, componentFoodId: component.id } },
+        update: { quantity: 1, unit: "SERVING" },
+        create: { foodId: food.id, componentFoodId: component.id, quantity: 1, unit: "SERVING" },
       });
     }
 
@@ -593,7 +690,7 @@ async function main(): Promise<void> {
   });
 
   process.stdout.write(
-    `Seeded ${foodDefinitions.length} Vietnamese foods and demo data.\n`,
+    `Seeded ${foodDefinitions.length + additionalFoodDefinitions.length} Vietnamese foods and demo data.\n`,
   );
 }
 

@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { normalizeFoodText } from "./food-taxonomy.js";
 
 export class FoodRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -25,16 +26,18 @@ export class FoodRepository {
       return Promise.resolve([]);
     }
 
+    const normalized = normalizeFoodText(value);
     return this.prisma.food.findMany({
       where: {
         isActive: true,
         OR: [
           { canonicalName: { contains: value, mode: "insensitive" } },
+          { normalizedName: { contains: normalized, mode: "insensitive" } },
           { nameVi: { contains: value, mode: "insensitive" } },
           { nameEn: { contains: value, mode: "insensitive" } },
           {
             aliases: {
-              some: { alias: { contains: value, mode: "insensitive" } },
+              some: { OR: [{ alias: { contains: value, mode: "insensitive" } }, { normalizedAlias: { contains: normalized, mode: "insensitive" } }] },
             },
           },
         ],
