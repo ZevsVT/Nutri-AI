@@ -1,0 +1,63 @@
+name: Build package
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-main
+  cancel-in-progress: true
+
+jobs:
+  package:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    name: Build deployable artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Build backend
+        working-directory: backend
+        run: |
+          npm ci
+          npm run db:generate
+          npm run build
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-package
+          path: |
+            backend/dist
+            backend/prisma
+            backend/package.json
+            backend/package-lock.json
+            backend/Dockerfile
+          if-no-files-found: error
+          retention-days: 14

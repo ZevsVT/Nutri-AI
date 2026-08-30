@@ -13,6 +13,9 @@ The first version uses local demo data and a simulated AI recognition flow. No A
 
 The production backend foundation lives in [`backend/`](backend/README.md). Run it independently with `cd backend && npm install && npm run dev`.
 
+CI/CD, environment separation, deployment prerequisites, migrations, health
+checks, and rollback guidance are documented in [`docs/ci-cd.md`](docs/ci-cd.md).
+
 ## Production integration notes
 
 Issue #7 now provides the PostgreSQL/Prisma schema, migrations, seed workflow,

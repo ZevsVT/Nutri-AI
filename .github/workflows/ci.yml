@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "public/**"
+      - "backend/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".nvmrc"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - ".env.example"
+      - "backend/package.json"
+      - "backend/package-lock.json"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "backend/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".nvmrc"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - ".env.example"
+      - "backend/package.json"
+      - "backend/package-lock.json"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+
+  backend:
+    name: Backend validation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nutri_ai_ci
+          POSTGRES_USER: nutri_ai_ci
+          POSTGRES_PASSWORD: nutri_ai_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nutri_ai_ci -d nutri_ai_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://nutri_ai_ci:nutri_ai_ci_password@localhost:5432/nutri_ai_ci
+      NODE_ENV: development
+      AUTH_DEV_MODE: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Generate Prisma Client
+        run: npm run db:generate
+      - name: Validate Prisma schema
+        run: npm run db:validate
+      - name: Apply migrations to isolated CI database
+        run: npm run db:migrate
+      - name: Type check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Formatting check
+        run: npm run format:check
+      - name: Tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Dependency audit
+        run: npm run audit

@@ -1,0 +1,110 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [Build package]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options: [staging, production]
+      build_run_id:
+        description: Successful Build package run ID to promote (required for manual deployments)
+        required: true
+        type: string
+      build_commit:
+        description: Commit SHA produced by that build run (required for manual deployments)
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event.inputs.target || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+      HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.build_commit }}
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id || inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          pattern: "*"
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Apply staging migrations
+        working-directory: backend
+        run: |
+          npm ci
+          npm run db:generate
+          npm run db:migrate
+      - name: Request staging deployment
+        env:
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha || inputs.build_commit }}
+        run: >-
+          curl --fail --silent --show-error --request POST
+          --header 'Content-Type: application/json'
+          --data "{\"environment\":\"staging\",\"commit\":\"$COMMIT_SHA\",\"artifacts_run_id\":\"${{ github.event.workflow_run.id || inputs.build_run_id }}\"}"
+          "$DEPLOY_WEBHOOK_URL"
+      - name: Verify staging readiness
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 5 "$HEALTHCHECK_URL/health/ready"
+
+  deploy-production:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+      HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.build_commit }}
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          pattern: "*"
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Apply production migrations
+        working-directory: backend
+        run: |
+          npm ci
+          npm run db:generate
+          npm run db:migrate
+      - name: Request production deployment
+        run: >-
+          curl --fail --silent --show-error --request POST
+          --header 'Content-Type: application/json'
+          --data "{\"environment\":\"production\",\"commit\":\"${{ inputs.build_commit }}\",\"artifacts_run_id\":\"${{ inputs.build_run_id }}\"}"
+          "$DEPLOY_WEBHOOK_URL"
+      - name: Verify production readiness
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 5 "$HEALTHCHECK_URL/health/ready"
