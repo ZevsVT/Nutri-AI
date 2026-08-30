@@ -1,0 +1,192 @@
+import { createHash } from "node:crypto";
+
+export interface FoodSeed {
+  id: string;
+  canonicalName: string;
+  nameVi: string;
+  nameEn: string;
+  category: string;
+  cuisine: "Vietnamese";
+  foodType: string;
+  aliases: string[];
+  subcategory: string;
+  region: string;
+  cookingMethod: string;
+  servingUnit: string;
+  defaultServingSize: number;
+}
+
+function stableId(slug: string): string {
+  const hex = createHash("sha256").update(`nutri-ai-food:${slug}`).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20)}`;
+}
+
+function food(
+  slug: string,
+  nameVi: string,
+  nameEn: string,
+  category: string,
+  foodType: string,
+  cookingMethod: string,
+  region = "NATIONWIDE",
+  servingUnit = "SERVING",
+  defaultServingSize = 1,
+  aliases: string[] = [],
+): FoodSeed {
+  return {
+    id: stableId(slug), canonicalName: slug, nameVi, nameEn, category, cuisine: "Vietnamese", foodType,
+    aliases: [...new Set([nameVi, slug.replace(/-/g, " "), nameEn, ...aliases])], subcategory: category,
+    region, cookingMethod, servingUnit, defaultServingSize,
+  };
+}
+
+export const vietnameseFoodDefinitions: FoodSeed[] = [
+  // Staples and rice dishes
+  food("gao", "Gạo", "Rice", "STAPLE", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["rice"]),
+  food("com-trang", "Cơm trắng", "Steamed white rice", "RICE", "DISH", "STEAMED", "NATIONWIDE", "GRAM", 150, ["com", "white rice"]),
+  food("com-tam", "Cơm tấm", "Broken rice", "RICE", "DISH", "STEAMED", "SOUTH", "PLATE", 1, ["com tam"]),
+  food("com-tam-suon-bi-cha", "Cơm tấm sườn bì chả", "Broken rice with pork, shredded pork skin and egg meatloaf", "RICE", "MEAL", "GRILLED", "SOUTH", "PLATE", 1, ["com tam suon bi cha"]),
+  food("com-chien", "Cơm chiên", "Vietnamese fried rice", "RICE", "DISH", "FRIED", "NATIONWIDE", "PLATE", 1, ["com rang", "fried rice"]),
+  food("com-ga", "Cơm gà", "Vietnamese chicken rice", "RICE", "DISH", "STEAMED", "NATIONWIDE", "PLATE", 1, ["com ga"]),
+  food("com-chay", "Cơm chay", "Vegetarian rice meal", "RICE", "MEAL", "STEAMED", "NATIONWIDE", "PLATE", 1),
+  food("xoi", "Xôi", "Sticky rice", "RICE", "DISH", "STEAMED", "NATIONWIDE", "CUP", 1, ["sticky rice"]),
+  food("xoi-man", "Xôi mặn", "Savory sticky rice", "RICE", "MEAL", "STEAMED", "NATIONWIDE", "SERVING", 1),
+  food("xoi-xeo", "Xôi xéo", "Sticky rice with mung bean and fried shallots", "RICE", "DISH", "STEAMED", "NORTH", "SERVING", 1),
+  food("banh-chung", "Bánh chưng", "Square sticky rice cake", "RICE", "DISH", "BOILED", "NORTH", "PIECE", 1),
+  food("banh-tet", "Bánh tét", "Cylindrical sticky rice cake", "RICE", "DISH", "BOILED", "SOUTH", "SLICE", 1),
+  food("gao-lut", "Gạo lứt", "Brown rice", "STAPLE", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["brown rice"]),
+  food("banh-trang", "Bánh tráng", "Rice paper", "STAPLE", "INGREDIENT", "DRIED", "NATIONWIDE", "PIECE", 1, ["rice paper"]),
+  // Noodles, porridges and soups
+  food("pho-bo", "Phở bò", "Beef pho", "NOODLES", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1, ["pho bo", "beef noodle soup"]),
+  food("pho-ga", "Phở gà", "Chicken pho", "NOODLES", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1, ["pho ga", "chicken noodle soup"]),
+  food("pho-bo-tai", "Phở bò tái", "Rare beef pho", "NOODLES", "DISH", "SIMMERED", "NORTH", "BOWL", 1, ["pho bo tai"]),
+  food("bun-bo-hue", "Bún bò Huế", "Bun bo Hue", "NOODLES", "DISH", "SIMMERED", "CENTRAL", "BOWL", 1, ["bun bo hue"]),
+  food("bun-rieu", "Bún riêu", "Crab noodle soup", "NOODLES", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1, ["bun rieu"]),
+  food("bun-cha", "Bún chả", "Hanoi grilled pork with noodles", "NOODLES", "DISH", "GRILLED", "NORTH", "SERVING", 1, ["bun cha"]),
+  food("bun-thit-nuong", "Bún thịt nướng", "Vermicelli with grilled pork", "NOODLES", "DISH", "GRILLED", "SOUTH", "BOWL", 1, ["bun thit nuong"]),
+  food("bun-mam", "Bún mắm", "Fermented fish noodle soup", "NOODLES", "DISH", "SIMMERED", "SOUTH", "BOWL", 1, ["bun mam"]),
+  food("bun-moc", "Bún mọc", "Pork meatball noodle soup", "NOODLES", "DISH", "SIMMERED", "NORTH", "BOWL", 1, ["bun moc"]),
+  food("hu-tieu", "Hủ tiếu", "Southern rice noodle soup", "NOODLES", "DISH", "SIMMERED", "SOUTH", "BOWL", 1, ["hu tieu"]),
+  food("mi-quang", "Mì Quảng", "Quang-style turmeric noodles", "NOODLES", "DISH", "SIMMERED", "CENTRAL", "BOWL", 1, ["mi quang"]),
+  food("mi-xao", "Mì xào", "Stir-fried noodles", "NOODLES", "DISH", "STIR_FRIED", "NATIONWIDE", "PLATE", 1, ["mi xao"]),
+  food("mi-goi", "Mì gói", "Instant noodles", "PACKAGED_FOOD", "PACKAGED_FOOD", "BOILED", "NATIONWIDE", "SERVING", 1, ["mi tom", "instant noodles"]),
+  food("banh-canh", "Bánh canh", "Thick noodle soup", "NOODLES", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1, ["banh canh"]),
+  food("banh-canh-cua", "Bánh canh cua", "Crab thick noodle soup", "NOODLES", "DISH", "SIMMERED", "SOUTH", "BOWL", 1),
+  food("mien-ga", "Miến gà", "Glass noodle soup with chicken", "NOODLES", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1, ["mien ga"]),
+  food("chao", "Cháo", "Rice porridge", "SOUP", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1, ["rice porridge"]),
+  food("chao-long", "Cháo lòng", "Pork offal rice porridge", "SOUP", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1),
+  food("chao-ga", "Cháo gà", "Chicken rice porridge", "SOUP", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1),
+  food("sup-cua", "Súp cua", "Crab soup", "SOUP", "DISH", "SIMMERED", "SOUTH", "BOWL", 1),
+  // Meat, poultry, seafood and eggs
+  food("thit-bo", "Thịt bò", "Beef", "MEAT", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["beef"]),
+  food("thit-heo", "Thịt heo", "Pork", "MEAT", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["thit lon", "pork"]),
+  food("thit-ga", "Thịt gà", "Chicken", "POULTRY", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["ga", "chicken"]),
+  food("thit-vit", "Thịt vịt", "Duck", "POULTRY", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["vit", "duck"]),
+  food("suon-heo", "Sườn heo", "Pork ribs", "MEAT", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100),
+  food("thit-kho", "Thịt kho", "Vietnamese braised pork", "MEAT", "DISH", "BRAISED", "NATIONWIDE", "SERVING", 1, ["thit kho tau"]),
+  food("thit-kho-trung", "Thịt kho trứng", "Braised pork and eggs", "MEAT", "DISH", "BRAISED", "SOUTH", "SERVING", 1),
+  food("suon-xao-chua-ngot", "Sườn xào chua ngọt", "Sweet and sour pork ribs", "MEAT", "DISH", "STIR_FRIED", "NATIONWIDE", "SERVING", 1),
+  food("bo-xao", "Bò xào", "Stir-fried beef", "MEAT", "DISH", "STIR_FRIED", "NATIONWIDE", "SERVING", 1),
+  food("bo-luc", "Bò lúc lắc", "Shaking beef", "MEAT", "DISH", "STIR_FRIED", "SOUTH", "SERVING", 1),
+  food("ga-luoc", "Gà luộc", "Boiled chicken", "POULTRY", "DISH", "BOILED", "NATIONWIDE", "SERVING", 1),
+  food("ga-nuong", "Gà nướng", "Grilled chicken", "POULTRY", "DISH", "GRILLED", "NATIONWIDE", "SERVING", 1),
+  food("ga-kho-gung", "Gà kho gừng", "Ginger braised chicken", "POULTRY", "DISH", "BRAISED", "NATIONWIDE", "SERVING", 1),
+  food("trung-ga", "Trứng gà", "Chicken egg", "EGGS", "INGREDIENT", "RAW", "NATIONWIDE", "PIECE", 1, ["egg"]),
+  food("trung-chien", "Trứng chiên", "Vietnamese omelet", "EGGS", "DISH", "FRIED", "NATIONWIDE", "PIECE", 1, ["trung ran"]),
+  food("trung-kho", "Trứng kho", "Braised eggs", "EGGS", "DISH", "BRAISED", "NATIONWIDE", "PIECE", 1),
+  food("ca-loc", "Cá lóc", "Snakehead fish", "SEAFOOD", "INGREDIENT", "RAW", "SOUTH", "GRAM", 100, ["ca qua", "snakehead fish"]),
+  food("ca-thu", "Cá thu", "Mackerel", "SEAFOOD", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100),
+  food("ca-kho-to", "Cá kho tộ", "Caramelized fish in clay pot", "SEAFOOD", "DISH", "BRAISED", "SOUTH", "SERVING", 1),
+  food("tom", "Tôm", "Shrimp", "SEAFOOD", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["prawn", "shrimp"]),
+  food("tom-rang", "Tôm rang", "Caramelized shrimp", "SEAFOOD", "DISH", "STIR_FRIED", "NATIONWIDE", "SERVING", 1),
+  food("muc", "Mực", "Squid", "SEAFOOD", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["squid"]),
+  food("muc-xao", "Mực xào", "Stir-fried squid", "SEAFOOD", "DISH", "STIR_FRIED", "NATIONWIDE", "SERVING", 1),
+  food("cua", "Cua", "Crab", "SEAFOOD", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["crab"]),
+  food("ngheu", "Nghêu", "Clam", "SEAFOOD", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["clam"]),
+  food("so", "Sò", "Shellfish", "SEAFOOD", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100),
+  // Soups and vegetables
+  food("canh-chua", "Canh chua", "Vietnamese sour soup", "SOUP", "DISH", "SIMMERED", "SOUTH", "BOWL", 1),
+  food("canh-rau", "Canh rau", "Vegetable soup", "SOUP", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1),
+  food("canh-bi", "Canh bí", "Winter melon soup", "SOUP", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1),
+  food("canh-cai", "Canh cải", "Mustard green soup", "SOUP", "DISH", "SIMMERED", "NATIONWIDE", "BOWL", 1),
+  food("rau-muong", "Rau muống", "Water spinach", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["morning glory"]),
+  food("rau-muong-xao-toi", "Rau muống xào tỏi", "Garlic stir-fried water spinach", "VEGETABLES", "DISH", "STIR_FRIED", "NATIONWIDE", "SERVING", 1),
+  food("rau-muong-luoc", "Rau muống luộc", "Boiled water spinach", "VEGETABLES", "DISH", "BOILED", "NATIONWIDE", "SERVING", 1),
+  food("cai-xanh", "Cải xanh", "Mustard greens", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["mustard greens"]),
+  food("bap-cai", "Bắp cải", "Cabbage", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["cabbage"]),
+  food("dau-que", "Đậu que", "Green beans", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["green beans"]),
+  food("ca-chua", "Cà chua", "Tomato", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["tomato"]),
+  food("dua-leo", "Dưa leo", "Cucumber", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["dua chuot", "cucumber"]),
+  food("bi-do", "Bí đỏ", "Pumpkin", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["pumpkin"]),
+  food("khoai-lang", "Khoai lang", "Sweet potato", "VEGETABLES", "INGREDIENT", "BOILED", "NATIONWIDE", "GRAM", 100, ["sweet potato"]),
+  food("nam", "Nấm", "Mushrooms", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["mushroom"]),
+  food("gia-do", "Giá đỗ", "Bean sprouts", "VEGETABLES", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["bean sprouts"]),
+  // Plant proteins and fruit
+  food("dau-hu", "Đậu hũ", "Tofu", "PLANT_PROTEIN", "INGREDIENT", "STEAMED", "NATIONWIDE", "GRAM", 100, ["dau phu", "tofu"]),
+  food("dau-hu-chien", "Đậu hũ chiên", "Fried tofu", "PLANT_PROTEIN", "DISH", "FRIED", "NATIONWIDE", "SERVING", 1),
+  food("dau-hu-sot-ca-chua", "Đậu hũ sốt cà chua", "Tofu in tomato sauce", "PLANT_PROTEIN", "DISH", "SIMMERED", "NATIONWIDE", "SERVING", 1),
+  food("dau-xanh", "Đậu xanh", "Mung beans", "PLANT_PROTEIN", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["mung bean"]),
+  food("dau-den", "Đậu đen", "Black beans", "PLANT_PROTEIN", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["black bean"]),
+  food("chuoi", "Chuối", "Banana", "FRUITS", "INGREDIENT", "RAW", "NATIONWIDE", "PIECE", 1, ["banana"]),
+  food("xoai", "Xoài", "Mango", "FRUITS", "INGREDIENT", "RAW", "NATIONWIDE", "PIECE", 1, ["mango"]),
+  food("thanh-long", "Thanh long", "Dragon fruit", "FRUITS", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["dragon fruit"]),
+  food("dua-hau", "Dưa hấu", "Watermelon", "FRUITS", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["watermelon"]),
+  food("du-du", "Đu đủ", "Papaya", "FRUITS", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["papaya"]),
+  food("bo", "Bơ", "Avocado", "FRUITS", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["avocado"]),
+  food("mit", "Mít", "Jackfruit", "FRUITS", "INGREDIENT", "RAW", "NATIONWIDE", "GRAM", 100, ["jackfruit"]),
+  // Snacks, desserts and beverages
+  food("banh-mi", "Bánh mì", "Vietnamese baguette sandwich", "SNACK", "SNACK", "BAKED", "NATIONWIDE", "PIECE", 1, ["banh mi", "Vietnamese sandwich"]),
+  food("banh-mi-thit", "Bánh mì thịt", "Pork banh mi", "SNACK", "SNACK", "BAKED", "NATIONWIDE", "PIECE", 1, ["banh mi thit"]),
+  food("goi-cuon", "Gỏi cuốn", "Fresh spring roll", "SNACK", "SNACK", "STEAMED", "NATIONWIDE", "PIECE", 1, ["goi cuon", "summer roll"]),
+  food("cha-gio", "Chả giò", "Fried spring roll", "SNACK", "SNACK", "FRIED", "NATIONWIDE", "PIECE", 1, ["nem ran", "cha gio"]),
+  food("banh-xeo", "Bánh xèo", "Vietnamese crispy pancake", "SNACK", "DISH", "FRIED", "NATIONWIDE", "PIECE", 1, ["banh xeo"]),
+  food("banh-cuon", "Bánh cuốn", "Steamed rice rolls", "SNACK", "DISH", "STEAMED", "NORTH", "SERVING", 1, ["banh cuon"]),
+  food("banh-khot", "Bánh khọt", "Savory mini rice pancakes", "SNACK", "SNACK", "FRIED", "SOUTH", "SERVING", 1, ["banh khot"]),
+  food("banh-beo", "Bánh bèo", "Steamed rice cakes", "SNACK", "SNACK", "STEAMED", "CENTRAL", "SERVING", 1, ["banh beo"]),
+  food("banh-bot-loc", "Bánh bột lọc", "Tapioca dumplings with shrimp and pork", "SNACK", "SNACK", "STEAMED", "CENTRAL", "SERVING", 1, ["banh bot loc"]),
+  food("che-dau-xanh", "Chè đậu xanh", "Mung bean sweet soup", "DESSERT", "DESSERT", "SIMMERED", "NATIONWIDE", "CUP", 1),
+  food("che", "Chè", "Vietnamese sweet soup", "DESSERT", "DESSERT", "SIMMERED", "NATIONWIDE", "CUP", 1, ["sweet soup"]),
+  food("che-dau-den", "Chè đậu đen", "Black bean sweet soup", "DESSERT", "DESSERT", "SIMMERED", "NATIONWIDE", "CUP", 1),
+  food("che-ba-mau", "Chè ba màu", "Three-color dessert", "DESSERT", "DESSERT", "SIMMERED", "NATIONWIDE", "CUP", 1, ["che 3 mau"]),
+  food("che-chuoi", "Chè chuối", "Banana tapioca pudding", "DESSERT", "DESSERT", "SIMMERED", "NATIONWIDE", "CUP", 1),
+  food("ca-phe-den", "Cà phê đen", "Black Vietnamese coffee", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1, ["ca phe den", "black coffee"]),
+  food("ca-phe-sua", "Cà phê sữa", "Vietnamese coffee with condensed milk", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1, ["ca phe sua"]),
+  food("ca-phe-sua-da", "Cà phê sữa đá", "Iced Vietnamese coffee with condensed milk", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1, ["ca phe sua da", "Vietnamese iced coffee"]),
+  food("tra", "Trà", "Tea", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1, ["tea"]),
+  food("tra-da", "Trà đá", "Iced tea", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1),
+  food("nuoc-mia", "Nước mía", "Sugarcane juice", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1, ["nuoc mia", "sugarcane juice"]),
+  food("nuoc-dua", "Nước dừa", "Coconut water", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1, ["nuoc dua", "coconut water"]),
+  food("sinh-to", "Sinh tố", "Fruit smoothie", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1, ["smoothie"]),
+  food("nuoc-ep", "Nước ép", "Fresh fruit juice", "BEVERAGE", "BEVERAGE", "OTHER", "NATIONWIDE", "CUP", 1, ["fresh juice"]),
+  // Sauces and packaged foods
+  food("nuoc-mam", "Nước mắm", "Fish sauce", "CONDIMENT", "CONDIMENT", "FERMENTED", "NATIONWIDE", "TABLESPOON", 1, ["nuoc mam", "fish sauce"]),
+  food("nuoc-cham", "Nước chấm", "Vietnamese dipping sauce", "CONDIMENT", "CONDIMENT", "OTHER", "NATIONWIDE", "TABLESPOON", 1, ["dipping sauce"]),
+  food("tuong-ot", "Tương ớt", "Chili sauce", "CONDIMENT", "CONDIMENT", "FERMENTED", "NATIONWIDE", "TABLESPOON", 1, ["tuong ot", "chili sauce"]),
+  food("mam-tom", "Mắm tôm", "Shrimp paste", "CONDIMENT", "CONDIMENT", "FERMENTED", "NORTH", "TABLESPOON", 1, ["mam tom", "shrimp paste"]),
+  food("dua-cai", "Dưa cải", "Mustard green pickles", "CONDIMENT", "CONDIMENT", "FERMENTED", "NATIONWIDE", "GRAM", 50, ["dua cai chua"]),
+  food("nuoc-tuong", "Nước tương", "Soy sauce", "CONDIMENT", "CONDIMENT", "FERMENTED", "NATIONWIDE", "TABLESPOON", 1, ["soy sauce"]),
+  food("sua-chua-dong-hop", "Sữa chua đóng hộp", "Packaged yogurt", "PACKAGED_FOOD", "PACKAGED_FOOD", "FERMENTED", "NATIONWIDE", "CUP", 1, ["sua chua", "yogurt"]),
+  food("xuc-xich", "Xúc xích", "Sausage", "PACKAGED_FOOD", "PACKAGED_FOOD", "OTHER", "NATIONWIDE", "PIECE", 1, ["sausage"]),
+  food("cha-lua", "Chả lụa", "Vietnamese pork sausage", "PACKAGED_FOOD", "PACKAGED_FOOD", "STEAMED", "NATIONWIDE", "SLICE", 1, ["gio lua"]),
+  food("ca-ngu-hop", "Cá ngừ đóng hộp", "Canned tuna", "PACKAGED_FOOD", "PACKAGED_FOOD", "OTHER", "NATIONWIDE", "GRAM", 100, ["canned tuna"]),
+];
+
+export function validateFoodDefinitions(definitions = vietnameseFoodDefinitions): void {
+  const seen = new Map<string, string>();
+  const slugs = new Set<string>();
+  for (const item of definitions) {
+    if (!item.id || !item.canonicalName || !item.nameVi || !item.nameEn || !item.category || !item.foodType) {
+      throw new Error(`Food ${item.canonicalName || "<unknown>"} is missing required fields`);
+    }
+    if (slugs.has(item.canonicalName)) throw new Error(`Duplicate food slug: ${item.canonicalName}`);
+    slugs.add(item.canonicalName);
+    for (const alias of item.aliases) {
+      const normalized = alias.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase("vi").trim().replace(/\s+/g, " ");
+      const owner = seen.get(`${normalized}:vi`);
+      if (owner && owner !== item.canonicalName) throw new Error(`Alias collision: ${alias} (${owner}, ${item.canonicalName})`);
+      seen.set(`${normalized}:vi`, item.canonicalName);
+    }
+  }
+}
+
+validateFoodDefinitions();

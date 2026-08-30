@@ -7,13 +7,13 @@ import {
   InsightSeverity,
   MealStatus,
   MealType,
-  NutritionAnalysisStatus,
   PrismaClient,
   RecipeDifficulty,
   RecipeStatus,
   UserRole,
 } from "@prisma/client";
 import { normalizeFoodText, slugifyFoodName } from "../src/modules/foods/food-taxonomy.js";
+import { validateFoodDefinitions, vietnameseFoodDefinitions } from "./vietnamese-foods.js";
 
 const prisma = new PrismaClient();
 
@@ -231,7 +231,13 @@ const categoryMap: Record<string, string> = {
 };
 const foodTypeMap: Record<string, string> = { "main dish": "DISH", "side dish": "DISH", breakfast: "MEAL" };
 
+// These legacy definitions document the pre-Issue #14 seed shape; only the
+// dedicated UTF-8 catalog is written now.
+void foodDefinitions;
+void additionalFoodDefinitions;
+
 async function main(): Promise<void> {
+  validateFoodDefinitions(vietnameseFoodDefinitions);
   await prisma.$transaction(async (transaction) => {
     const curatedSource = await transaction.foodSource.upsert({
       where: { id: curatedSourceId },
@@ -271,7 +277,7 @@ async function main(): Promise<void> {
       },
     });
 
-    const curatedVersion = await transaction.nutritionVersion.upsert({
+    await transaction.nutritionVersion.upsert({
       where: { id: curatedVersionId },
       update: { sourceId: curatedSource.id, version: "2026.01" },
       create: {
@@ -293,13 +299,25 @@ async function main(): Promise<void> {
       },
     });
 
+    // The former MVP seed contained unverified demo nutrition numbers. Keep
+    // the source/version records for provenance, but remove those mappings and
+    // snapshots so this catalog never presents fabricated nutrition data.
+    await transaction.mealItemNutrition.deleteMany({ where: { sourceId: curatedSource.id } });
+    await transaction.foodNutrition.deleteMany({ where: { nutritionVersionId: curatedVersionId } });
+    await transaction.nutritionAnalysis.deleteMany({ where: { mealId: "00000000-0000-0000-0000-000000000301" } });
+
     const foods = new Map<string, { id: string; nameVi: string }>();
-    for (const definition of [...foodDefinitions, ...additionalFoodDefinitions]) {
+    for (const definition of vietnameseFoodDefinitions) {
+      const slug = slugifyFoodName(definition.nameVi);
+      const existing = await transaction.food.findFirst({
+        where: { OR: [{ id: definition.id }, { canonicalName: definition.canonicalName }, { slug }] },
+        select: { id: true },
+      });
       const food = await transaction.food.upsert({
-        where: { id: definition.id },
+        where: { id: existing?.id ?? definition.id },
         update: {
           canonicalName: definition.canonicalName,
-          slug: slugifyFoodName(definition.nameVi),
+          slug,
           normalizedName: normalizeFoodText(definition.nameVi),
           nameVi: definition.nameVi,
           nameEn: definition.nameEn,
@@ -351,40 +369,6 @@ async function main(): Promise<void> {
         });
       }
 
-      if (!definition.nutrition) continue;
-      const [calories, protein, carbohydrates, fat, fiber, sugar, sodium] = definition.nutrition;
-      await transaction.foodNutrition.upsert({
-        where: {
-          foodId_nutritionVersionId: {
-            foodId: food.id,
-            nutritionVersionId: curatedVersion.id,
-          },
-        },
-        update: {
-          servingAmount: 1,
-          servingUnit: "serving",
-          calories,
-          protein,
-          carbohydrates,
-          fat,
-          fiber,
-          sugar,
-          sodium,
-        },
-        create: {
-          foodId: food.id,
-          nutritionVersionId: curatedVersion.id,
-          servingAmount: 1,
-          servingUnit: "serving",
-          calories,
-          protein,
-          carbohydrates,
-          fat,
-          fiber,
-          sugar,
-          sodium,
-        },
-      });
     }
 
     const componentLinks = [
@@ -526,68 +510,6 @@ async function main(): Promise<void> {
       },
     });
 
-    await transaction.mealItemNutrition.upsert({
-      where: { mealItemId },
-      update: {
-        nutritionVersionId: curatedVersion.id,
-        sourceId: curatedSource.id,
-        servingAmount: 1,
-        servingUnit: "serving",
-        calories: 560,
-        protein: 28,
-        carbohydrates: 52,
-        fat: 14,
-        fiber: 5,
-        sugar: 4,
-        sodium: 1100,
-        estimated: true,
-        confidence: 0.87,
-      },
-      create: {
-        mealItemId,
-        nutritionVersionId: curatedVersion.id,
-        sourceId: curatedSource.id,
-        servingAmount: 1,
-        servingUnit: "serving",
-        calories: 560,
-        protein: 28,
-        carbohydrates: 52,
-        fat: 14,
-        fiber: 5,
-        sugar: 4,
-        sodium: 1100,
-        estimated: true,
-        confidence: 0.87,
-      },
-    });
-
-    await transaction.nutritionAnalysis.upsert({
-      where: { mealId },
-      update: {
-        status: NutritionAnalysisStatus.COMPLETED,
-        totalCalories: 560,
-        totalProtein: 28,
-        totalCarbohydrates: 52,
-        totalFat: 14,
-        totalFiber: 5,
-        confidence: 0.87,
-        method: "food-nutrition-snapshot",
-        version: curatedVersion.version,
-      },
-      create: {
-        mealId,
-        status: NutritionAnalysisStatus.COMPLETED,
-        totalCalories: 560,
-        totalProtein: 28,
-        totalCarbohydrates: 52,
-        totalFat: 14,
-        totalFiber: 5,
-        confidence: 0.87,
-        method: "food-nutrition-snapshot",
-        version: curatedVersion.version,
-      },
-    });
-
     const aiAnalysis = await transaction.aIAnalysis.upsert({
       where: { id: analysisId },
       update: {
@@ -690,7 +612,7 @@ async function main(): Promise<void> {
   });
 
   process.stdout.write(
-    `Seeded ${foodDefinitions.length + additionalFoodDefinitions.length} Vietnamese foods and demo data.\n`,
+    `Seeded ${vietnameseFoodDefinitions.length} Vietnamese foods and demo data (nutrition mappings intentionally omitted until source-reviewed).\n`,
   );
 }
 
