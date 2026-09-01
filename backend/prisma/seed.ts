@@ -12,8 +12,14 @@ import {
   RecipeStatus,
   UserRole,
 } from "@prisma/client";
-import { normalizeFoodText, slugifyFoodName } from "../src/modules/foods/food-taxonomy.js";
-import { validateFoodDefinitions, vietnameseFoodDefinitions } from "./vietnamese-foods.js";
+import {
+  normalizeFoodText,
+  slugifyFoodName,
+} from "../src/modules/foods/food-taxonomy.js";
+import {
+  validateFoodDefinitions,
+  vietnameseFoodDefinitions,
+} from "./vietnamese-foods.js";
 
 const prisma = new PrismaClient();
 
@@ -173,7 +179,7 @@ const foodDefinitions: FoodDefinition[] = [
     aliases: ["cháo", "chao", "rice porridge"],
     nutrition: [280, 14, 38, 7, 1, 2, 520],
   },
-] ;
+];
 
 // Identity-only records intentionally carry no nutrition values. Nutrition is
 // added only when backed by a reviewed source/version.
@@ -182,29 +188,106 @@ const additionalFoodDefinitions: FoodDefinition[] = [
   ["thit-bo", "Thịt bò", "Beef", "MEAT", "INGREDIENT", "RAW"],
   ["thit-ga", "Thịt gà", "Chicken", "POULTRY", "INGREDIENT", "RAW"],
   ["ca-loc", "Cá lóc", "Snakehead fish", "SEAFOOD", "INGREDIENT", "RAW"],
-  ["ca-kho-to", "Cá kho tộ", "Caramelized fish in clay pot", "SEAFOOD", "DISH", "BRAISED"],
+  [
+    "ca-kho-to",
+    "Cá kho tộ",
+    "Caramelized fish in clay pot",
+    "SEAFOOD",
+    "DISH",
+    "BRAISED",
+  ],
   ["ga-luoc", "Gà luộc", "Boiled chicken", "POULTRY", "DISH", "BOILED"],
   ["ga-nuong", "Gà nướng", "Grilled chicken", "POULTRY", "DISH", "GRILLED"],
-  ["thit-kho", "Thịt kho", "Vietnamese braised pork", "MEAT", "DISH", "BRAISED"],
+  [
+    "thit-kho",
+    "Thịt kho",
+    "Vietnamese braised pork",
+    "MEAT",
+    "DISH",
+    "BRAISED",
+  ],
   ["canh-chua", "Canh chua", "Sour soup", "SOUP", "DISH", "SIMMERED"],
-  ["rau-muong", "Rau muống", "Water spinach", "VEGETABLES", "INGREDIENT", "RAW"],
-  ["rau-muong-xao-toi", "Rau muống xào tỏi", "Stir-fried morning glory with garlic", "VEGETABLES", "DISH", "STIR_FRIED"],
+  [
+    "rau-muong",
+    "Rau muống",
+    "Water spinach",
+    "VEGETABLES",
+    "INGREDIENT",
+    "RAW",
+  ],
+  [
+    "rau-muong-xao-toi",
+    "Rau muống xào tỏi",
+    "Stir-fried morning glory with garlic",
+    "VEGETABLES",
+    "DISH",
+    "STIR_FRIED",
+  ],
   ["dau-hu", "Đậu hũ", "Tofu", "PLANT_PROTEIN", "INGREDIENT", "STEAMED"],
-  ["dau-hu-chien", "Đậu hũ chiên", "Fried tofu", "PLANT_PROTEIN", "DISH", "FRIED"],
+  [
+    "dau-hu-chien",
+    "Đậu hũ chiên",
+    "Fried tofu",
+    "PLANT_PROTEIN",
+    "DISH",
+    "FRIED",
+  ],
   ["chuoi", "Chuối", "Banana", "FRUITS", "INGREDIENT", "RAW"],
   ["xoai", "Xoài", "Mango", "FRUITS", "INGREDIENT", "RAW"],
-  ["cha-gio", "Chả giò", "Vietnamese fried spring roll", "SNACK", "SNACK", "FRIED"],
+  [
+    "cha-gio",
+    "Chả giò",
+    "Vietnamese fried spring roll",
+    "SNACK",
+    "SNACK",
+    "FRIED",
+  ],
   ["banh-cuon", "Bánh cuốn", "Steamed rice rolls", "SNACK", "DISH", "STEAMED"],
   ["che", "Chè", "Vietnamese sweet soup", "DESSERT", "DESSERT", "SIMMERED"],
-  ["ca-phe-sua-da", "Cà phê sữa đá", "Vietnamese iced coffee with condensed milk", "BEVERAGE", "BEVERAGE", "OTHER"],
+  [
+    "ca-phe-sua-da",
+    "Cà phê sữa đá",
+    "Vietnamese iced coffee with condensed milk",
+    "BEVERAGE",
+    "BEVERAGE",
+    "OTHER",
+  ],
   ["nuoc-mia", "Nước mía", "Sugarcane juice", "BEVERAGE", "BEVERAGE", "OTHER"],
   ["nuoc-mam", "Nước mắm", "Fish sauce", "CONDIMENT", "CONDIMENT", "FERMENTED"],
   ["tuong-ot", "Tương ớt", "Chili sauce", "CONDIMENT", "CONDIMENT", "OTHER"],
-  ["mi-quang", "Mì Quảng", "Quang-style noodles", "NOODLES", "DISH", "SIMMERED"],
-  ["hu-tieu", "Hủ tiếu", "Southern Vietnamese noodle soup", "NOODLES", "DISH", "SIMMERED"],
-  ["banh-canh", "Bánh canh", "Thick tapioca noodle soup", "NOODLES", "DISH", "SIMMERED"],
+  [
+    "mi-quang",
+    "Mì Quảng",
+    "Quang-style noodles",
+    "NOODLES",
+    "DISH",
+    "SIMMERED",
+  ],
+  [
+    "hu-tieu",
+    "Hủ tiếu",
+    "Southern Vietnamese noodle soup",
+    "NOODLES",
+    "DISH",
+    "SIMMERED",
+  ],
+  [
+    "banh-canh",
+    "Bánh canh",
+    "Thick tapioca noodle soup",
+    "NOODLES",
+    "DISH",
+    "SIMMERED",
+  ],
   ["banh-trang", "Bánh tráng", "Rice paper", "STAPLE", "INGREDIENT", "DRIED"],
-  ["sua-chua-dong-hop", "Sữa chua đóng hộp", "Packaged yogurt", "PACKAGED_FOOD", "PACKAGED_FOOD", "OTHER"],
+  [
+    "sua-chua-dong-hop",
+    "Sữa chua đóng hộp",
+    "Packaged yogurt",
+    "PACKAGED_FOOD",
+    "PACKAGED_FOOD",
+    "OTHER",
+  ],
 ].map(([slug, nameVi, nameEn, category, foodType, cookingMethod], index) => ({
   id: `00000000-0000-0000-0000-0000000003${String(index + 1).padStart(2, "0")}`,
   canonicalName: slug,
@@ -225,11 +308,20 @@ function normalizeAlias(alias: string): string {
 }
 
 const categoryMap: Record<string, string> = {
-  "noodle soup": "NOODLES", "rice noodle": "NOODLES", "rice plate": "RICE",
-  "rice dish": "RICE", "rice porridge": "RICE", sandwich: "STAPLE",
-  "fresh roll": "SNACK", "savory pancake": "SNACK",
+  "noodle soup": "NOODLES",
+  "rice noodle": "NOODLES",
+  "rice plate": "RICE",
+  "rice dish": "RICE",
+  "rice porridge": "RICE",
+  sandwich: "STAPLE",
+  "fresh roll": "SNACK",
+  "savory pancake": "SNACK",
 };
-const foodTypeMap: Record<string, string> = { "main dish": "DISH", "side dish": "DISH", breakfast: "MEAL" };
+const foodTypeMap: Record<string, string> = {
+  "main dish": "DISH",
+  "side dish": "DISH",
+  breakfast: "MEAL",
+};
 
 // These legacy definitions document the pre-Issue #14 seed shape; only the
 // dedicated UTF-8 catalog is written now.
@@ -302,15 +394,27 @@ async function main(): Promise<void> {
     // The former MVP seed contained unverified demo nutrition numbers. Keep
     // the source/version records for provenance, but remove those mappings and
     // snapshots so this catalog never presents fabricated nutrition data.
-    await transaction.mealItemNutrition.deleteMany({ where: { sourceId: curatedSource.id } });
-    await transaction.foodNutrition.deleteMany({ where: { nutritionVersionId: curatedVersionId } });
-    await transaction.nutritionAnalysis.deleteMany({ where: { mealId: "00000000-0000-0000-0000-000000000301" } });
+    await transaction.mealItemNutrition.deleteMany({
+      where: { sourceId: curatedSource.id },
+    });
+    await transaction.foodNutrition.deleteMany({
+      where: { nutritionVersionId: curatedVersionId },
+    });
+    await transaction.nutritionAnalysis.deleteMany({
+      where: { mealId: "00000000-0000-0000-0000-000000000301" },
+    });
 
     const foods = new Map<string, { id: string; nameVi: string }>();
     for (const definition of vietnameseFoodDefinitions) {
       const slug = slugifyFoodName(definition.nameVi);
       const existing = await transaction.food.findFirst({
-        where: { OR: [{ id: definition.id }, { canonicalName: definition.canonicalName }, { slug }] },
+        where: {
+          OR: [
+            { id: definition.id },
+            { canonicalName: definition.canonicalName },
+            { slug },
+          ],
+        },
         select: { id: true },
       });
       const food = await transaction.food.upsert({
@@ -368,7 +472,6 @@ async function main(): Promise<void> {
           },
         });
       }
-
     }
 
     const componentLinks = [
@@ -382,9 +485,19 @@ async function main(): Promise<void> {
       const component = foods.get(componentName);
       if (!food || !component) continue;
       await transaction.foodComponent.upsert({
-        where: { foodId_componentFoodId: { foodId: food.id, componentFoodId: component.id } },
+        where: {
+          foodId_componentFoodId: {
+            foodId: food.id,
+            componentFoodId: component.id,
+          },
+        },
         update: { quantity: 1, unit: "SERVING" },
-        create: { foodId: food.id, componentFoodId: component.id, quantity: 1, unit: "SERVING" },
+        create: {
+          foodId: food.id,
+          componentFoodId: component.id,
+          quantity: 1,
+          unit: "SERVING",
+        },
       });
     }
 

@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FOOD_CATEGORIES, FOOD_TYPES, normalizeFoodText, slugifyFoodName } from "../src/modules/foods/food-taxonomy.js";
-import { validateFoodDefinitions, vietnameseFoodDefinitions } from "../prisma/vietnamese-foods.js";
+import {
+  FOOD_CATEGORIES,
+  FOOD_TYPES,
+  normalizeFoodText,
+  slugifyFoodName,
+} from "../src/modules/foods/food-taxonomy.js";
+import {
+  validateFoodDefinitions,
+  vietnameseFoodDefinitions,
+} from "../prisma/vietnamese-foods.js";
 
 test("normalization preserves searchable equivalence without changing display values", () => {
   assert.equal(normalizeFoodText("Phở bò"), "pho bo");
@@ -10,20 +18,49 @@ test("normalization preserves searchable equivalence without changing display va
 });
 
 test("taxonomy vocabularies contain the required controlled values", () => {
-  assert.deepEqual(FOOD_TYPES, ["INGREDIENT", "DISH", "MEAL", "BEVERAGE", "CONDIMENT", "SNACK", "DESSERT", "PACKAGED_FOOD"]);
+  assert.deepEqual(FOOD_TYPES, [
+    "INGREDIENT",
+    "DISH",
+    "MEAL",
+    "BEVERAGE",
+    "CONDIMENT",
+    "SNACK",
+    "DESSERT",
+    "PACKAGED_FOOD",
+  ]);
   assert.ok(FOOD_CATEGORIES.includes("RICE"));
   assert.ok(FOOD_CATEGORIES.includes("PLANT_PROTEIN"));
 });
 
 test("Vietnamese catalog is broad, deterministic, and alias-safe", () => {
   assert.ok(vietnameseFoodDefinitions.length >= 100);
-  assert.equal(new Set(vietnameseFoodDefinitions.map((food) => food.canonicalName)).size, vietnameseFoodDefinitions.length);
-  assert.equal(new Set(vietnameseFoodDefinitions.map((food) => food.id)).size, vietnameseFoodDefinitions.length);
+  assert.equal(
+    new Set(vietnameseFoodDefinitions.map((food) => food.canonicalName)).size,
+    vietnameseFoodDefinitions.length,
+  );
+  assert.equal(
+    new Set(vietnameseFoodDefinitions.map((food) => food.id)).size,
+    vietnameseFoodDefinitions.length,
+  );
   assert.doesNotThrow(() => validateFoodDefinitions());
-  const pho = vietnameseFoodDefinitions.find((food) => food.canonicalName === "pho-bo");
+  const pho = vietnameseFoodDefinitions.find(
+    (food) => food.canonicalName === "pho-bo",
+  );
   assert.ok(pho);
   assert.ok(pho.aliases.some((alias) => normalizeFoodText(alias) === "pho bo"));
-  assert.equal(vietnameseFoodDefinitions.filter((food) => food.foodType === "INGREDIENT").length > 0, true);
-  assert.equal(vietnameseFoodDefinitions.filter((food) => food.foodType === "DISH").length > 0, true);
-  assert.equal(vietnameseFoodDefinitions.filter((food) => food.foodType === "BEVERAGE").length > 0, true);
+  assert.equal(
+    vietnameseFoodDefinitions.filter((food) => food.foodType === "INGREDIENT")
+      .length > 0,
+    true,
+  );
+  assert.equal(
+    vietnameseFoodDefinitions.filter((food) => food.foodType === "DISH")
+      .length > 0,
+    true,
+  );
+  assert.equal(
+    vietnameseFoodDefinitions.filter((food) => food.foodType === "BEVERAGE")
+      .length > 0,
+    true,
+  );
 });

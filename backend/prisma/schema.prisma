@@ -70,7 +70,14 @@ enum NutritionMappingType {
   EXACT_MATCH
   CLOSE_MATCH
   DERIVED_ESTIMATE
+  ESTIMATED
   UNAVAILABLE
+}
+
+enum NutritionReferenceBasis {
+  PER_100_G
+  PER_100_ML
+  PER_SERVING
 }
 
 enum AIAnalysisStatus {
@@ -315,13 +322,14 @@ model FoodNutrition {
   nutritionVersionId String   @db.Uuid
   servingAmount      Decimal  @db.Decimal(12, 3)
   servingUnit        String   @db.VarChar(32)
-  calories           Decimal  @db.Decimal(12, 2)
-  protein            Decimal  @db.Decimal(12, 3)
-  carbohydrates      Decimal  @db.Decimal(12, 3)
-  fat                Decimal  @db.Decimal(12, 3)
-  fiber              Decimal  @db.Decimal(12, 3)
-  sugar              Decimal  @db.Decimal(12, 3)
-  sodium             Decimal  @db.Decimal(12, 3)
+  referenceBasis     NutritionReferenceBasis @default(PER_SERVING)
+  calories           Decimal? @db.Decimal(12, 2)
+  protein            Decimal? @db.Decimal(12, 3)
+  carbohydrates      Decimal? @db.Decimal(12, 3)
+  fat                Decimal? @db.Decimal(12, 3)
+  fiber              Decimal? @db.Decimal(12, 3)
+  sugar              Decimal? @db.Decimal(12, 3)
+  sodium             Decimal? @db.Decimal(12, 3)
   confidence         Decimal? @db.Decimal(4, 3)
   mappingType        NutritionMappingType @default(EXACT_MATCH)
   createdAt          DateTime @default(now()) @db.Timestamptz(3)

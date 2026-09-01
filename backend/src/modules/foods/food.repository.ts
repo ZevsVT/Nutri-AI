@@ -37,7 +37,17 @@ export class FoodRepository {
           { nameEn: { contains: value, mode: "insensitive" } },
           {
             aliases: {
-              some: { OR: [{ alias: { contains: value, mode: "insensitive" } }, { normalizedAlias: { contains: normalized, mode: "insensitive" } }] },
+              some: {
+                OR: [
+                  { alias: { contains: value, mode: "insensitive" } },
+                  {
+                    normalizedAlias: {
+                      contains: normalized,
+                      mode: "insensitive",
+                    },
+                  },
+                ],
+              },
             },
           },
         ],

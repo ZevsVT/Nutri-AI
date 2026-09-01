@@ -53,9 +53,9 @@ export class ReadinessService {
           this.metrics?.recordDependencyError(dependency.name, "readiness");
           dependencies[dependency.name] = "unavailable";
           return dependency.name;
-        }
-        finally {
-          if (!(dependency.name in dependencies)) dependencies[dependency.name] = "ok";
+        } finally {
+          if (!(dependency.name in dependencies))
+            dependencies[dependency.name] = "ok";
         }
       }),
     );
@@ -66,6 +66,10 @@ export class ReadinessService {
       }
     }
 
-    return { ready: failures.length === 0, failedChecks: failures, dependencies };
+    return {
+      ready: failures.length === 0,
+      failedChecks: failures,
+      dependencies,
+    };
   }
 }

@@ -73,7 +73,12 @@ const rawEnvironmentSchema = z.object({
   ),
   STORAGE_ACCESS_KEY: emptyStringAsUndefined,
   STORAGE_SECRET_KEY: emptyStringAsUndefined,
-  STORAGE_LOCAL_ROOT: z.string().trim().min(1).max(500).default(".data/storage"),
+  STORAGE_LOCAL_ROOT: z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .default(".data/storage"),
   STORAGE_READ_URL_TTL_SECONDS: optionalNumber(900, 60, 604_800),
   STORAGE_TEMPORARY_TTL_HOURS: optionalNumber(24, 1, 168),
   STORAGE_RETENTION_DAYS: optionalNumber(30, 1, 3_650),
@@ -231,12 +236,19 @@ export function loadConfig(
     );
   }
 
-  if (parsed.STORAGE_PROVIDER === "s3" && (!parsed.STORAGE_ACCESS_KEY || !parsed.STORAGE_SECRET_KEY)) {
-    configurationIssues.push("STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY are required for S3 storage");
+  if (
+    parsed.STORAGE_PROVIDER === "s3" &&
+    (!parsed.STORAGE_ACCESS_KEY || !parsed.STORAGE_SECRET_KEY)
+  ) {
+    configurationIssues.push(
+      "STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY are required for S3 storage",
+    );
   }
 
   if (secureEnvironment && parsed.STORAGE_PROVIDER === "none") {
-    configurationIssues.push("STORAGE_PROVIDER must be local or s3 in staging or production");
+    configurationIssues.push(
+      "STORAGE_PROVIDER must be local or s3 in staging or production",
+    );
   }
 
   if (configurationIssues.length > 0) {
