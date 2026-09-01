@@ -7,6 +7,7 @@ import {
 } from "../../integrations/barcode/barcode-provider.js";
 import type { StorageService } from "../storage/storage.service.js";
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
+import { rankFoods, searchTokens, type FoodSearchFilters } from "../foods/food-search.js";
 
 export interface NutritionTotals {
   calories: number;
@@ -86,6 +87,7 @@ export interface BusinessApiService {
     locale: string;
     page: number;
     pageSize: number;
+    filters?: FoodSearchFilters;
   }): Promise<{ data: FoodDto[]; total: number }>;
   getFood(userId: string, id: string): Promise<FoodDto>;
   createMeal(userId: string, input: MealInput): Promise<MealDto>;
@@ -183,6 +185,10 @@ interface MemoryFood {
   cuisine: string | null;
   aliases: string[];
   nutrition: NutritionTotals;
+  foodType?: string;
+  subcategory?: string;
+  region?: string;
+  cookingMethod?: string;
 }
 interface MemoryMeal extends MealDto {
   userId: string;
@@ -270,19 +276,27 @@ export class InMemoryBusinessApiService implements BusinessApiService {
     query,
     page,
     pageSize,
+    filters,
   }: {
     query: string;
     locale: string;
     page: number;
     pageSize: number;
+    filters?: FoodSearchFilters;
   }) {
     const value = normalizeFoodText(query);
     if (!value) return { data: [], total: 0 };
-    const found = this.foods.filter((food) =>
-      [food.name.vi, food.name.en ?? "", food.id, ...food.aliases].some(
-        (field) => normalizeFoodText(field).includes(value),
-      ),
-    );
+    const candidates = this.foods
+      .filter((food) => Object.entries(filters ?? {}).every(([key, expected]) => !expected || food[key as keyof MemoryFood] === expected))
+      .map((food) => ({
+        ...food,
+        nameVi: food.name.vi,
+        nameEn: food.name.en,
+        aliases: food.aliases.map((alias) => ({ alias })),
+      }));
+    const found = rankFoods(candidates, value)
+      .map(({ item }) => this.foods.find((food) => food.id === item.id))
+      .filter((food): food is MemoryFood => Boolean(food));
     return {
       data: pageOf(found, page, pageSize).map((food) => this.publicFood(food)),
       total: found.length,
@@ -617,16 +631,24 @@ export class PrismaBusinessApiService implements BusinessApiService {
     query,
     page,
     pageSize,
+    filters,
   }: {
     query: string;
     locale: string;
     page: number;
     pageSize: number;
+    filters?: FoodSearchFilters;
   }) {
     if (!query.trim()) return { data: [], total: 0 };
     const normalized = normalizeFoodText(query);
+    const tokens = searchTokens(query);
+    const taxonomy = filters ?? {};
+    const filterWhere: Prisma.FoodWhereInput = Object.fromEntries(
+      Object.entries(taxonomy).filter(([, value]) => value).map(([key, value]) => [key, value]),
+    );
     const where = {
       isActive: true,
+      ...filterWhere,
       OR: [
         { canonicalName: { contains: query, mode: "insensitive" as const } },
         {
@@ -637,6 +659,11 @@ export class PrismaBusinessApiService implements BusinessApiService {
         },
         { nameVi: { contains: query, mode: "insensitive" as const } },
         { nameEn: { contains: query, mode: "insensitive" as const } },
+        ...tokens.flatMap((token) => [
+          { normalizedName: { contains: token, mode: "insensitive" as const } },
+          { nameEn: { contains: token, mode: "insensitive" as const } },
+          { aliases: { some: { normalizedAlias: { contains: token, mode: "insensitive" as const } } } },
+        ]),
         {
           aliases: {
             some: {
@@ -654,17 +681,20 @@ export class PrismaBusinessApiService implements BusinessApiService {
         },
       ],
     };
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.food.findMany({
-        where,
-        orderBy: { nameVi: "asc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: { aliases: true },
-      }),
-      this.prisma.food.count({ where }),
-    ]);
-    return { data: rows.map((food) => this.foodDto(food)), total };
+    // Fetch a bounded lexical candidate set, then rank in application code. The
+    // first two normalized characters also give typo queries a useful indexable
+    // candidate set without enabling an unbounded full-table scan.
+    const prefix = normalized.slice(0, 2);
+    const candidates = await this.prisma.food.findMany({
+      where: { ...filterWhere, isActive: true, OR: [...where.OR, ...(prefix ? [{ normalizedName: { contains: prefix, mode: "insensitive" as const } }] : [])] },
+      include: { aliases: true },
+      take: 2_000,
+    });
+    const ranked = rankFoods(candidates, normalized);
+    return {
+      data: ranked.slice((page - 1) * pageSize, page * pageSize).map(({ item }) => this.foodDto(item)),
+      total: ranked.length,
+    };
   }
 
   async getFood(_userId: string, id: string) {

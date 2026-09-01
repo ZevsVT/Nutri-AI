@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { normalizeFoodText } from "./food-taxonomy.js";
+import { rankFoods, searchTokens, type FoodSearchFilters } from "./food-search.js";
 
 export class FoodRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -20,41 +21,47 @@ export class FoodRepository {
     });
   }
 
-  search(query: string, limit = 20) {
+  async search(query: string, limit = 20, filters: FoodSearchFilters = {}) {
     const value = query.trim();
-    if (value.length === 0) {
-      return Promise.resolve([]);
-    }
+    if (value.length === 0) return [];
 
     const normalized = normalizeFoodText(value);
-    return this.prisma.food.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { canonicalName: { contains: value, mode: "insensitive" } },
-          { normalizedName: { contains: normalized, mode: "insensitive" } },
-          { nameVi: { contains: value, mode: "insensitive" } },
-          { nameEn: { contains: value, mode: "insensitive" } },
-          {
-            aliases: {
-              some: {
-                OR: [
-                  { alias: { contains: value, mode: "insensitive" } },
-                  {
-                    normalizedAlias: {
-                      contains: normalized,
-                      mode: "insensitive",
-                    },
-                  },
-                ],
-              },
+    const tokens = searchTokens(value);
+    const where = {
+      isActive: true,
+      ...Object.fromEntries(
+        Object.entries(filters).filter(([, expected]) => expected),
+      ),
+      OR: [
+        { canonicalName: { contains: value, mode: "insensitive" as const } },
+        { normalizedName: { contains: normalized, mode: "insensitive" as const } },
+        { nameVi: { contains: value, mode: "insensitive" as const } },
+        { nameEn: { contains: value, mode: "insensitive" as const } },
+        ...tokens.flatMap((token) => [
+          { normalizedName: { contains: token, mode: "insensitive" as const } },
+          { nameEn: { contains: token, mode: "insensitive" as const } },
+          { aliases: { some: { normalizedAlias: { contains: token, mode: "insensitive" as const } } } },
+        ]),
+        {
+          aliases: {
+            some: {
+              OR: [
+                { alias: { contains: value, mode: "insensitive" as const } },
+                { normalizedAlias: { contains: normalized, mode: "insensitive" as const } },
+              ],
             },
           },
-        ],
-      },
-      orderBy: { nameVi: "asc" },
-      take: limit,
+        },
+      ],
+    };
+    const candidates = await this.prisma.food.findMany({
+      where,
+      include: { aliases: true },
+      take: 2_000,
     });
+    return rankFoods(candidates, normalized)
+      .slice(0, limit)
+      .map(({ item }) => item);
   }
 
   findNutrition(foodId: string, nutritionVersionId: string) {
