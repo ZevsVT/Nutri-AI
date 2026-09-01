@@ -60,9 +60,21 @@ password field nullable; accounts without a password cannot authenticate until
 an approved account migration flow is provided.
 
 Nutrition columns use fixed conventions: `calories` is kcal, protein/
-carbohydrates/fat/fiber/sugar are grams, and `sodium` is milligrams. Decimal
-columns are used for portions and nutrition values so calculations do not rely
-on binary floating point.
+carbohydrates/fat/fiber/sugar are grams, and `sodium` is milligrams. `FoodNutrition`
+also stores an explicit `referenceBasis` (`PER_100_G`, `PER_100_ML`, or
+`PER_SERVING`). Nullable nutrient columns mean unknown; they are never filled
+with zero. Provider adapters must convert into the canonical model before
+persistence. Serving calculations scale all known values by
+`requestedQuantity / referenceQuantity`, preserve nulls, and do not round
+intermediate values. Presentation layers may round for display only.
+
+The reusable implementation is in
+`backend/src/modules/nutrition/nutrition-normalization.ts`. It validates
+non-negative values, positive reference quantities, provenance, mapping type,
+and confidence in `[0, 1]`. Energy conversion uses `1 kcal = 4.184 kJ`.
+Macro-derived energy is a warning signal only and never overwrites source
+calories. Mapping quality is represented by the Prisma enum and approximate or
+unavailable mappings must remain distinguishable from exact matches.
 
 ## Local setup
 
@@ -87,7 +99,8 @@ The committed migrations are
 `20260825200000_init_nutrition_schema`,
 `20260825210000_add_authentication`, and
 `20260825220000_add_secure_storage`, and
-`20260830220000_add_food_taxonomy`.
+`20260830220000_add_food_taxonomy`, and
+`20260901090000_normalize_nutrition_data`.
 
 ## Seed data
 

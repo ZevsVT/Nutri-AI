@@ -201,7 +201,7 @@ test("historical meal nutrition remains stable after a newer food nutrition vers
             },
           },
         })
-      ).calories.toString(),
+      ).calories?.toString(),
       after.calories.toString(),
     );
   } finally {
