@@ -151,7 +151,9 @@ export class StorageService {
     } catch (error) {
       this.metrics?.recordDependencyError("storage", "download");
       if (error instanceof AppError) throw error;
-      throw new AppError("STORAGE_ERROR", "Storage read failed", { cause: error });
+      throw new AppError("STORAGE_ERROR", "Storage read failed", {
+        cause: error,
+      });
     }
   }
 
@@ -172,7 +174,9 @@ export class StorageService {
     } catch (error) {
       this.metrics?.recordDependencyError("storage", "get_url");
       if (error instanceof AppError) throw error;
-      throw new AppError("STORAGE_ERROR", "Storage URL generation failed", { cause: error });
+      throw new AppError("STORAGE_ERROR", "Storage URL generation failed", {
+        cause: error,
+      });
     }
     return {
       url,
@@ -231,7 +235,9 @@ export class StorageService {
     } catch (error) {
       this.metrics?.recordDependencyError("storage", "delete");
       if (error instanceof AppError) throw error;
-      throw new AppError("STORAGE_ERROR", "Storage delete failed", { cause: error });
+      throw new AppError("STORAGE_ERROR", "Storage delete failed", {
+        cause: error,
+      });
     }
     await this.repository.markDeleted(record.id, ownerId);
   }

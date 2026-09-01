@@ -35,9 +35,15 @@ export class NutritionRepository {
    * it never recalculates or overwrites historical nutrition values.
    */
   createSnapshotForUser(userId: string, input: NutritionSnapshotInput) {
-    if (!input.sourceId.trim() || !input.nutritionVersionId.trim() || !input.servingUnit.trim()) throw new Error("Nutrition provenance and serving unit are required");
+    if (
+      !input.sourceId.trim() ||
+      !input.nutritionVersionId.trim() ||
+      !input.servingUnit.trim()
+    )
+      throw new Error("Nutrition provenance and serving unit are required");
     validateNutrition(input);
-    if (!Number.isFinite(input.servingAmount) || input.servingAmount <= 0) throw new Error("Serving amount must be positive");
+    if (!Number.isFinite(input.servingAmount) || input.servingAmount <= 0)
+      throw new Error("Serving amount must be positive");
     return this.prisma.$transaction(async (transaction) => {
       const item = await transaction.mealItem.findFirst({
         where: {

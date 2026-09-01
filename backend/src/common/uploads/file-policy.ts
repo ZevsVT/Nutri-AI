@@ -125,7 +125,10 @@ export function createObjectKey(
 }
 
 export function ownerNamespace(ownerId: string): string {
-  return createHash("sha256").update(ownerId, "utf8").digest("hex").slice(0, 32);
+  return createHash("sha256")
+    .update(ownerId, "utf8")
+    .digest("hex")
+    .slice(0, 32);
 }
 
 export function validateImageContent(
@@ -153,7 +156,12 @@ export function validateImageContent(
 function detectImageContentType(
   bytes: Uint8Array,
 ): FileMetadata["contentType"] | undefined {
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+  if (
+    bytes.length >= 3 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff
+  ) {
     return "image/jpeg";
   }
   if (
@@ -180,7 +188,12 @@ function detectImageContentType(
 }
 
 function hasJpegEnd(bytes: Uint8Array): boolean {
-  if (bytes.length < 10 || bytes[bytes.length - 2] !== 0xff || bytes[bytes.length - 1] !== 0xd9) return false;
+  if (
+    bytes.length < 10 ||
+    bytes[bytes.length - 2] !== 0xff ||
+    bytes[bytes.length - 1] !== 0xd9
+  )
+    return false;
   let offset = 2;
   let sawFrame = false;
   let sawScan = false;
@@ -189,12 +202,26 @@ function hasJpegEnd(bytes: Uint8Array): boolean {
     while (bytes[offset] === 0xff) offset += 1;
     const marker = bytes[offset++];
     if (marker === undefined) return false;
-    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (
+      marker === 0xd8 ||
+      marker === 0x01 ||
+      (marker >= 0xd0 && marker <= 0xd7)
+    )
+      continue;
     if (marker === 0xd9) return sawFrame && sawScan;
     const length = ((bytes[offset] ?? 0) << 8) | (bytes[offset + 1] ?? 0);
     if (length < 2 || offset + length > bytes.length) return false;
-    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
-      if (length < 8 || (((bytes[offset + 3] ?? 0) << 8) | (bytes[offset + 4] ?? 0)) === 0 || (((bytes[offset + 5] ?? 0) << 8) | (bytes[offset + 6] ?? 0)) === 0) return false;
+    if (
+      marker >= 0xc0 &&
+      marker <= 0xcf &&
+      ![0xc4, 0xc8, 0xcc].includes(marker)
+    ) {
+      if (
+        length < 8 ||
+        (((bytes[offset + 3] ?? 0) << 8) | (bytes[offset + 4] ?? 0)) === 0 ||
+        (((bytes[offset + 5] ?? 0) << 8) | (bytes[offset + 6] ?? 0)) === 0
+      )
+        return false;
       sawFrame = true;
     }
     if (marker === 0xda) sawScan = true;
@@ -205,7 +232,11 @@ function hasJpegEnd(bytes: Uint8Array): boolean {
 }
 
 function hasValidPngStructure(bytes: Uint8Array): boolean {
-  if (bytes.length < 33 || readUInt32(bytes, 8) !== 13 || ascii(bytes, 12, 4) !== "IHDR") {
+  if (
+    bytes.length < 33 ||
+    readUInt32(bytes, 8) !== 13 ||
+    ascii(bytes, 12, 4) !== "IHDR"
+  ) {
     return false;
   }
   if (readUInt32(bytes, 16) === 0 || readUInt32(bytes, 20) === 0) {
@@ -220,7 +251,8 @@ function hasValidPngStructure(bytes: Uint8Array): boolean {
     const end = offset + 12 + length;
     if (end > bytes.length) return false;
     if (type === "IDAT") sawImageData = true;
-    if (type === "IEND") return sawImageData && length === 0 && end === bytes.length;
+    if (type === "IEND")
+      return sawImageData && length === 0 && end === bytes.length;
     offset = end;
   }
   return false;
@@ -232,7 +264,10 @@ function hasValidWebpStructure(bytes: Uint8Array): boolean {
   if (declaredSize > bytes.length) return false;
   const chunkType = ascii(bytes, 12, 4);
   const chunkSize = readUInt32(bytes, 16);
-  return ["VP8 ", "VP8L", "VP8X"].includes(chunkType) && 20 + chunkSize <= bytes.length;
+  return (
+    ["VP8 ", "VP8L", "VP8X"].includes(chunkType) &&
+    20 + chunkSize <= bytes.length
+  );
 }
 
 function ascii(bytes: Uint8Array, offset: number, length: number): string {
@@ -241,11 +276,12 @@ function ascii(bytes: Uint8Array, offset: number, length: number): string {
 
 function readUInt32(bytes: Uint8Array, offset: number): number {
   return (
-    ((bytes[offset] ?? 0) << 24) |
-    ((bytes[offset + 1] ?? 0) << 16) |
-    ((bytes[offset + 2] ?? 0) << 8) |
-    (bytes[offset + 3] ?? 0)
-  ) >>> 0;
+    (((bytes[offset] ?? 0) << 24) |
+      ((bytes[offset + 1] ?? 0) << 16) |
+      ((bytes[offset + 2] ?? 0) << 8) |
+      (bytes[offset + 3] ?? 0)) >>>
+    0
+  );
 }
 
 export function canAccessStoredObject(

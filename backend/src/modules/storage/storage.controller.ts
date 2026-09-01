@@ -80,15 +80,13 @@ export class StorageController {
       },
       "storage_upload_succeeded",
     );
-    return reply
-      .code(201)
-      .send(
-        successResponse({
-          ...uploaded,
-          readUrl: read.url,
-          readUrlExpiresAt: read.expiresAt,
-        }),
-      );
+    return reply.code(201).send(
+      successResponse({
+        ...uploaded,
+        readUrl: read.url,
+        readUrlExpiresAt: read.expiresAt,
+      }),
+    );
   };
 
   read = async (

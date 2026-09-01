@@ -33,11 +33,24 @@ import {
   type BusinessApiService,
 } from "../modules/api/api.service.js";
 import { StorageController } from "../modules/storage/storage.controller.js";
-import { InMemoryStorageObjectRepository, type StorageObjectRepository } from "../modules/storage/storage.repository.js";
-import { StorageService, createStorageProvider } from "../modules/storage/storage.service.js";
+import {
+  InMemoryStorageObjectRepository,
+  type StorageObjectRepository,
+} from "../modules/storage/storage.repository.js";
+import {
+  StorageService,
+  createStorageProvider,
+} from "../modules/storage/storage.service.js";
 import type { StorageProvider } from "../integrations/storage/storage-provider.js";
-import { MetricsRegistry, metricRoute } from "../common/observability/metrics.js";
-import { rateLimitCategory, rateLimitMax, routePath } from "../common/observability/rate-limit.js";
+import {
+  MetricsRegistry,
+  metricRoute,
+} from "../common/observability/metrics.js";
+import {
+  rateLimitCategory,
+  rateLimitMax,
+  routePath,
+} from "../common/observability/rate-limit.js";
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -78,12 +91,18 @@ export async function buildApp(
     logController: new LogController({ disableRequestLogging: true }),
   });
   const metrics = new MetricsRegistry();
-  const readiness = new ReadinessService(options.readinessChecks, app.log, metrics);
-  const storageService = options.storageService ?? new StorageService(
-    options.storageProvider ?? createStorageProvider(config),
-    options.storageObjectRepository ?? new InMemoryStorageObjectRepository(),
-    config,
+  const readiness = new ReadinessService(
+    options.readinessChecks,
+    app.log,
+    metrics,
   );
+  const storageService =
+    options.storageService ??
+    new StorageService(
+      options.storageProvider ?? createStorageProvider(config),
+      options.storageObjectRepository ?? new InMemoryStorageObjectRepository(),
+      config,
+    );
 
   app.decorate("config", config);
   app.decorate("readiness", readiness);
@@ -119,9 +138,13 @@ export async function buildApp(
     global: config.rateLimitEnabled,
     hook: "preHandler",
     allowList: (request) =>
-      ["/health", "/ready", "/health/live", "/health/ready", "/metrics"].includes(
-        routePath(request.url),
-      ),
+      [
+        "/health",
+        "/ready",
+        "/health/live",
+        "/health/ready",
+        "/metrics",
+      ].includes(routePath(request.url)),
     // Authentication is a route pre-handler, so private requests are keyed
     // by the server-resolved user ID before this hook runs. Anonymous routes
     // use Fastify's proxy-aware IP, which only honors forwarded headers when
@@ -135,7 +158,9 @@ export async function buildApp(
       requestId: request.id,
     }),
     onExceeded: (request) => {
-      const route = metricRoute(request.routeOptions.url ?? routePath(request.url));
+      const route = metricRoute(
+        request.routeOptions.url ?? routePath(request.url),
+      );
       const limiterCategory = rateLimitCategory(route);
       metrics.recordRateLimitRejection(route, request.method);
       request.log.warn(
@@ -165,9 +190,15 @@ export async function buildApp(
           name: "foundation",
           description: "Non-business foundation contract examples",
         },
-        { name: "foods", description: "Canonical foods and nutrition provenance" },
+        {
+          name: "foods",
+          description: "Canonical foods and nutrition provenance",
+        },
         { name: "meals", description: "Owned meal diary and confirmation" },
-        { name: "analysis", description: "Asynchronous meal recognition lifecycle" },
+        {
+          name: "analysis",
+          description: "Asynchronous meal recognition lifecycle",
+        },
         { name: "nutrition", description: "Confirmed nutrition summaries" },
         { name: "assistant", description: "Grounded AI assistant" },
         { name: "recipes", description: "Published recipes" },
@@ -440,7 +471,12 @@ export async function buildApp(
   app.addHook("onResponse", async (request, reply) => {
     const route = metricRoute(request.routeOptions.url);
     const durationMs = Math.round(performance.now() - request.startedAt);
-    metrics.recordHttpRequest(request.method, route, reply.statusCode, durationMs);
+    metrics.recordHttpRequest(
+      request.method,
+      route,
+      reply.statusCode,
+      durationMs,
+    );
     request.log.info(
       {
         event: "request_completed",
@@ -457,11 +493,17 @@ export async function buildApp(
   installErrorHandling(app);
   const systemService = new SystemService(config, readiness);
   const apiController = new ApiController(
-    options.businessApiService ?? new InMemoryBusinessApiService(undefined, storageService),
+    options.businessApiService ??
+      new InMemoryBusinessApiService(undefined, storageService),
   );
   const storageController = new StorageController(storageService, config);
   storageService.startCleanup(app.log);
-  await registerRoutes(app, new SystemController(systemService), apiController, storageController);
+  await registerRoutes(
+    app,
+    new SystemController(systemService),
+    apiController,
+    storageController,
+  );
   await options.registerAdditionalRoutes?.(app);
   readiness.markInitialized();
 

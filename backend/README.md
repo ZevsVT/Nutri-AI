@@ -24,39 +24,39 @@ The API listens on `http://localhost:4000` by default. The frontend remains at `
 
 ## Environment variables
 
-| Variable                                  | Purpose                                                                                        |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                                | `development`, `staging`, or `production`.                                                     |
-| `PORT`                                    | HTTP port; defaults to `4000`.                                                                 |
-| `API_BASE_URL`                            | Base URL used in OpenAPI metadata; staging and production require HTTPS.                       |
-| `DATABASE_URL`                            | PostgreSQL connection string used by Prisma, migrations, seed, and readiness checks.           |
-| `POSTGRES_DB`, `POSTGRES_USER`            | Local PostgreSQL database and role names.                                                      |
-| `POSTGRES_PASSWORD`, `POSTGRES_PORT`      | Local PostgreSQL credentials and role names.                                                   |
-| `JWT_SECRET`, `JWT_EXPIRES_IN`            | Legacy token configuration retained for compatibility; sessions are used by Issue #8.          |
-| `AUTH_SESSION_TTL_HOURS`                  | Server-managed session lifetime; defaults to 30 days.                                          |
-| `PASSWORD_RESET_TTL_MINUTES`              | Password-reset credential lifetime; defaults to 30 minutes.                                    |
-| `CORS_ORIGINS`                            | Comma-separated allowlist. Wildcard CORS is rejected in production.                            |
-| `STORAGE_PROVIDER`, `STORAGE_BUCKET`      | `local` for development or `s3` for private S3-compatible object storage.                     |
-| `STORAGE_REGION`, `STORAGE_ENDPOINT`      | S3 region and optional S3-compatible endpoint.                                                  |
-| `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`| Server-only S3 credentials; never expose them to the frontend.                                |
-| `STORAGE_LOCAL_ROOT`                      | Private filesystem root used by the local provider.                                             |
-| `STORAGE_READ_URL_TTL_SECONDS`            | Short-lived S3 read URL lifetime; local reads remain authenticated API requests.               |
-| `STORAGE_TEMPORARY_TTL_HOURS`, `STORAGE_RETENTION_DAYS` | Abandoned upload and soft-deleted meal retention windows.                    |
-| `AI_PROVIDER`, `AI_API_KEY`               | Future provider configuration. A key is required when a provider is selected.                  |
-| `NUTRITION_PROVIDER`, `NUTRITION_API_KEY` | Future nutrition provider configuration.                                                       |
-| `LOG_LEVEL`                               | Pino log level. Production logs are JSON.                                                      |
-| `AUTH_DEV_MODE`                           | Development-only mock identity headers for foundation tests; keep `false` outside development. |
-| `REQUEST_BODY_LIMIT_BYTES`                | Maximum HTTP request body size.                                                                |
-| `FILE_UPLOAD_LIMIT_BYTES`                 | Fastify multipart file size limit.                                                             |
-| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`  | Global rate-limit ceiling and fixed-window duration.                                             |
-| `RATE_LIMIT_ENABLED`                     | Enables the in-process limiter; defaults to `true`.                                              |
-| `RATE_LIMIT_AUTH_MAX`                    | Authentication-route ceiling, bounded by `RATE_LIMIT_MAX`; defaults to `10`.                    |
-| `RATE_LIMIT_EXPENSIVE_MAX`               | AI, meal-analysis, and barcode ceiling, bounded by the global maximum; defaults to `20`.         |
-| `RATE_LIMIT_UPLOAD_MAX`                  | Image-upload ceiling, bounded by the global maximum; defaults to `10`.                          |
-| `EXTERNAL_REQUEST_TIMEOUT_MS`             | Default timeout for future provider calls.                                                     |
-| `EXTERNAL_RETRY_LIMIT`                    | Maximum retry budget for explicitly safe/idempotent operations.                                |
-| `SHUTDOWN_TIMEOUT_MS`                     | Maximum graceful-shutdown window.                                                              |
-| `TRUST_PROXY`                             | Enables proxy-aware client IP handling; only enable when the deployment proxy is trusted.      |
+| Variable                                                | Purpose                                                                                        |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                              | `development`, `staging`, or `production`.                                                     |
+| `PORT`                                                  | HTTP port; defaults to `4000`.                                                                 |
+| `API_BASE_URL`                                          | Base URL used in OpenAPI metadata; staging and production require HTTPS.                       |
+| `DATABASE_URL`                                          | PostgreSQL connection string used by Prisma, migrations, seed, and readiness checks.           |
+| `POSTGRES_DB`, `POSTGRES_USER`                          | Local PostgreSQL database and role names.                                                      |
+| `POSTGRES_PASSWORD`, `POSTGRES_PORT`                    | Local PostgreSQL credentials and role names.                                                   |
+| `JWT_SECRET`, `JWT_EXPIRES_IN`                          | Legacy token configuration retained for compatibility; sessions are used by Issue #8.          |
+| `AUTH_SESSION_TTL_HOURS`                                | Server-managed session lifetime; defaults to 30 days.                                          |
+| `PASSWORD_RESET_TTL_MINUTES`                            | Password-reset credential lifetime; defaults to 30 minutes.                                    |
+| `CORS_ORIGINS`                                          | Comma-separated allowlist. Wildcard CORS is rejected in production.                            |
+| `STORAGE_PROVIDER`, `STORAGE_BUCKET`                    | `local` for development or `s3` for private S3-compatible object storage.                      |
+| `STORAGE_REGION`, `STORAGE_ENDPOINT`                    | S3 region and optional S3-compatible endpoint.                                                 |
+| `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`              | Server-only S3 credentials; never expose them to the frontend.                                 |
+| `STORAGE_LOCAL_ROOT`                                    | Private filesystem root used by the local provider.                                            |
+| `STORAGE_READ_URL_TTL_SECONDS`                          | Short-lived S3 read URL lifetime; local reads remain authenticated API requests.               |
+| `STORAGE_TEMPORARY_TTL_HOURS`, `STORAGE_RETENTION_DAYS` | Abandoned upload and soft-deleted meal retention windows.                                      |
+| `AI_PROVIDER`, `AI_API_KEY`                             | Future provider configuration. A key is required when a provider is selected.                  |
+| `NUTRITION_PROVIDER`, `NUTRITION_API_KEY`               | Future nutrition provider configuration.                                                       |
+| `LOG_LEVEL`                                             | Pino log level. Production logs are JSON.                                                      |
+| `AUTH_DEV_MODE`                                         | Development-only mock identity headers for foundation tests; keep `false` outside development. |
+| `REQUEST_BODY_LIMIT_BYTES`                              | Maximum HTTP request body size.                                                                |
+| `FILE_UPLOAD_LIMIT_BYTES`                               | Fastify multipart file size limit.                                                             |
+| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`                | Global rate-limit ceiling and fixed-window duration.                                           |
+| `RATE_LIMIT_ENABLED`                                    | Enables the in-process limiter; defaults to `true`.                                            |
+| `RATE_LIMIT_AUTH_MAX`                                   | Authentication-route ceiling, bounded by `RATE_LIMIT_MAX`; defaults to `10`.                   |
+| `RATE_LIMIT_EXPENSIVE_MAX`                              | AI, meal-analysis, and barcode ceiling, bounded by the global maximum; defaults to `20`.       |
+| `RATE_LIMIT_UPLOAD_MAX`                                 | Image-upload ceiling, bounded by the global maximum; defaults to `10`.                         |
+| `EXTERNAL_REQUEST_TIMEOUT_MS`                           | Default timeout for future provider calls.                                                     |
+| `EXTERNAL_RETRY_LIMIT`                                  | Maximum retry budget for explicitly safe/idempotent operations.                                |
+| `SHUTDOWN_TIMEOUT_MS`                                   | Maximum graceful-shutdown window.                                                              |
+| `TRUST_PROXY`                                           | Enables proxy-aware client IP handling; only enable when the deployment proxy is trusted.      |
 
 Configuration is parsed with Zod during startup. Invalid staging/production configuration fails fast.
 
