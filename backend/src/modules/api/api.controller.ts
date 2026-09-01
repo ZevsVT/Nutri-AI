@@ -33,6 +33,14 @@ export class ApiController {
       locale: request.query.locale,
       page: request.query.page,
       pageSize: request.query.pageSize,
+      filters: {
+        foodType: request.query.foodType,
+        category: request.query.category,
+        subcategory: request.query.subcategory,
+        region: request.query.region,
+        cookingMethod: request.query.cookingMethod,
+        cuisine: request.query.cuisine,
+      },
     });
     return reply.send({
       ...successResponse(result.data),
