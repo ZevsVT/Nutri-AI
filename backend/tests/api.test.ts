@@ -197,7 +197,7 @@ test("analysis lifecycle, nutrition, water, assistant, and barcode contracts are
       method: "POST",
       url: "/api/v1/barcode/scan",
       headers: user("user-a"),
-      payload: { barcode: "012345678901" },
+      payload: { barcode: "012345678905" },
     });
     assert.equal(barcode.statusCode, 200);
     assert.equal(barcode.json().data.status, "UNRESOLVED");

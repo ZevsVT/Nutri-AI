@@ -1,10 +1,16 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import { normalizeFoodText } from "./food-taxonomy.js";
 import {
   rankFoods,
   searchTokens,
   type FoodSearchFilters,
 } from "./food-search.js";
+
+export const activeFoodWhere = {
+  isActive: true,
+  status: "ACTIVE",
+  OR: [{ packagedProduct: null }, { packagedProduct: { status: "ACTIVE" } }],
+} satisfies Prisma.FoodWhereInput;
 
 export class FoodRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -32,7 +38,7 @@ export class FoodRepository {
     const normalized = normalizeFoodText(value);
     const tokens = searchTokens(value);
     const where = {
-      isActive: true,
+      AND: activeFoodWhere,
       ...Object.fromEntries(
         Object.entries(filters).filter(([, expected]) => expected),
       ),

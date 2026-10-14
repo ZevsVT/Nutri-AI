@@ -6,6 +6,7 @@ import { installSignalHandlers } from "./app/shutdown.js";
 import { loadConfig } from "./config/env.js";
 import { createPrismaDatabase } from "./integrations/database/prisma-database.js";
 import { PrismaAuthRepository } from "./modules/auth/auth.repository.js";
+import { PrismaBarcodeProvider } from "./modules/foods/barcode.service.js";
 import { PrismaBusinessApiService } from "./modules/api/api.service.js";
 import {
   InMemoryStorageObjectRepository,
@@ -39,7 +40,11 @@ try {
       ? new PrismaAuthRepository(database.client)
       : undefined,
     businessApiService: database
-      ? new PrismaBusinessApiService(database.client, undefined, storageService)
+      ? new PrismaBusinessApiService(
+          database.client,
+          new PrismaBarcodeProvider(database.client),
+          storageService,
+        )
       : undefined,
     storageService,
     readinessChecks: database

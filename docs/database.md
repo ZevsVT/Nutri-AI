@@ -11,6 +11,7 @@ capture → confirm → understand flow.
 | --- | --- | --- |
 | Account and profile | `User`, `UserPreference`, `UserConsent`, `Session`, `PasswordResetToken` | Issue #8 authentication and profile/privacy endpoints |
 | Searchable Vietnamese food | `Food`, `FoodAlias`, `FoodComponent` | `GET /api/foods/search` |
+| Packaged product and exact identifier | `PackagedProduct`, `FoodBarcode` | Authenticated `POST /api/v1/barcode/scan` |
 | Nutrition provenance | `FoodSource`, `NutritionVersion`, `FoodNutrition` | Food lookup and calculation services |
 | Captured diary event | `Meal`, `MealItem` | Meal CRUD and diary endpoints |
 | Confirmed nutrition | `MealItemNutrition`, `NutritionAnalysis` | Analysis confirmation and daily totals |
@@ -46,6 +47,15 @@ the numeric values, serving amount, source, and nutrition version used at that
 time. Updating or adding a later `FoodNutrition` row therefore cannot change a
 past diary result. The application/repository layer treats snapshots as
 write-once; retries return the existing snapshot.
+
+`PackagedProduct.foodId` is the canonical food UUID, with a unique import key,
+brand/formulation, source and current nutrition version. `FoodBarcode` stores
+an indexed normalized GTIN primary key and package-specific metadata; multiple
+packages can map to one formulation. Restrictive foreign keys preserve food,
+source and version references; the current version must belong to the product's
+source. Nullable snapshot nutrients preserve unknown values after confirmation.
+See [packaged foods](packaged-foods.md) for lifecycle, identity, usage conditions,
+source review and conflict-safe import rules.
 
 `NutritionAnalysis` totals are cached analysis output. The authoritative
 historical values for a confirmed meal are the item snapshots, not a later
@@ -100,16 +110,22 @@ The committed migrations are
 `20260825210000_add_authentication`, and
 `20260825220000_add_secure_storage`, and
 `20260830220000_add_food_taxonomy`, and
-`20260901090000_normalize_nutrition_data`.
+`20260901090000_normalize_nutrition_data`, and
+`20261014090000_add_packaged_food_barcodes`.
 
 ## Seed data
 
-`prisma/seed.ts` is deterministic and safe to run repeatedly. It includes a
-clearly local-only `demo@nutri-ai.local` account, Vietnamese food aliases,
-curated and USDA source records, nutrition version `2026.01`, nutrition rows,
-one confirmed phở bò meal with an immutable snapshot, a demo AI prediction, an
-insight, and a minimal published recipe. It does not create real production
-accounts.
+`prisma/seed.ts` is a development seed, not a production refresh mechanism.
+It includes a local-only `demo@nutri-ai.local` account, Vietnamese food aliases,
+curated/USDA sources and versions, a demo meal and AI prediction, an insight,
+and a recipe. Reviewed Vietnamese nutrition is not currently bundled. The seed
+deletes legacy curated nutrition mappings and snapshots and rewrites demo data;
+do not run it against a production catalog or user diary.
+
+Packaged-food refreshes use `npm run db:import:packaged`. This separate importer
+adds reviewed identity records and immutable nutrition versions, rejects
+conflicting mappings and preserves unrelated foods, aliases and historical
+records. It never invokes the general seed.
 
 Aliases store both display text and a normalized form. The taxonomy seed adds
 controlled metadata and identity-only foods where no reviewed nutrition source
@@ -181,7 +197,10 @@ npm run typecheck
 npm run build
 ```
 
-`tests/database.test.ts` always verifies client construction and runs the
-PostgreSQL integration checks when `DATABASE_URL` is reachable. Without a
-running database, the integration checks are skipped with an explicit reason;
-they do not pretend to validate migrations or historical behavior.
+`tests/database.test.ts` verifies client construction and legacy PostgreSQL
+integration behavior. The packaged-food endpoint/import and migration tests
+skip only when `DATABASE_URL` is absent; when configured, connectivity or missing
+migrations cause failures. Migration tests apply the committed SQL to isolated
+clean and representative populated schemas and verify preservation of existing
+identities, nutrition and snapshots. CI supplies PostgreSQL and runs all of
+these through `npm test`.

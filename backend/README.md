@@ -22,6 +22,21 @@ same credentials before starting the API. Apply the schema with
 
 The API listens on `http://localhost:4000` by default. The frontend remains at `http://localhost:5173`; add its origin to `CORS_ORIGINS` when using a different frontend URL. Server secrets stay in the backend environment and are never exposed to the frontend.
 
+## Packaged-food catalog
+
+After `npm run db:generate` and `npm run db:migrate`, run
+`npm run db:import:packaged` to load the reviewed local catalog, or
+`npm run db:import:packaged -- path/to/reviewed-products.json` for a reviewed
+update. This importer is separate from the development seed and reports
+inserted/updated/skipped/rejected entries. Do not use `db:seed` for production
+catalog refreshes: it deletes legacy curated nutrition and rewrites demo data.
+
+The barcode API resolves local GTINs without external credentials. The bundled
+three-product catalog has identity evidence and explicit unavailable nutrition;
+synthetic nutrition fixtures exist only in tests. The frontend camera scanner
+remains simulated. See [packaged-food documentation](../docs/packaged-foods.md)
+for sources, usage conditions, nutrition references and conflict handling.
+
 ## Environment variables
 
 | Variable                                                | Purpose                                                                                        |
