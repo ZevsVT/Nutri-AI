@@ -7,7 +7,11 @@ import {
 } from "../../integrations/barcode/barcode-provider.js";
 import type { StorageService } from "../storage/storage.service.js";
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
-import { rankFoods, searchTokens, type FoodSearchFilters } from "../foods/food-search.js";
+import {
+  rankFoods,
+  searchTokens,
+  type FoodSearchFilters,
+} from "../foods/food-search.js";
 
 export interface NutritionTotals {
   calories: number;
@@ -287,7 +291,12 @@ export class InMemoryBusinessApiService implements BusinessApiService {
     const value = normalizeFoodText(query);
     if (!value) return { data: [], total: 0 };
     const candidates = this.foods
-      .filter((food) => Object.entries(filters ?? {}).every(([key, expected]) => !expected || food[key as keyof MemoryFood] === expected))
+      .filter((food) =>
+        Object.entries(filters ?? {}).every(
+          ([key, expected]) =>
+            !expected || food[key as keyof MemoryFood] === expected,
+        ),
+      )
       .map((food) => ({
         ...food,
         nameVi: food.name.vi,
@@ -644,7 +653,9 @@ export class PrismaBusinessApiService implements BusinessApiService {
     const tokens = searchTokens(query);
     const taxonomy = filters ?? {};
     const filterWhere: Prisma.FoodWhereInput = Object.fromEntries(
-      Object.entries(taxonomy).filter(([, value]) => value).map(([key, value]) => [key, value]),
+      Object.entries(taxonomy)
+        .filter(([, value]) => value)
+        .map(([key, value]) => [key, value]),
     );
     const where = {
       isActive: true,
@@ -662,7 +673,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
         ...tokens.flatMap((token) => [
           { normalizedName: { contains: token, mode: "insensitive" as const } },
           { nameEn: { contains: token, mode: "insensitive" as const } },
-          { aliases: { some: { normalizedAlias: { contains: token, mode: "insensitive" as const } } } },
+          {
+            aliases: {
+              some: {
+                normalizedAlias: {
+                  contains: token,
+                  mode: "insensitive" as const,
+                },
+              },
+            },
+          },
         ]),
         {
           aliases: {
@@ -686,13 +706,31 @@ export class PrismaBusinessApiService implements BusinessApiService {
     // candidate set without enabling an unbounded full-table scan.
     const prefix = normalized.slice(0, 2);
     const candidates = await this.prisma.food.findMany({
-      where: { ...filterWhere, isActive: true, OR: [...where.OR, ...(prefix ? [{ normalizedName: { contains: prefix, mode: "insensitive" as const } }] : [])] },
+      where: {
+        ...filterWhere,
+        isActive: true,
+        OR: [
+          ...where.OR,
+          ...(prefix
+            ? [
+                {
+                  normalizedName: {
+                    contains: prefix,
+                    mode: "insensitive" as const,
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
       include: { aliases: true },
       take: 2_000,
     });
     const ranked = rankFoods(candidates, normalized);
     return {
-      data: ranked.slice((page - 1) * pageSize, page * pageSize).map(({ item }) => this.foodDto(item)),
+      data: ranked
+        .slice((page - 1) * pageSize, page * pageSize)
+        .map(({ item }) => this.foodDto(item)),
       total: ranked.length,
     };
   }

@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
 import { normalizeFoodText } from "./food-taxonomy.js";
-import { rankFoods, searchTokens, type FoodSearchFilters } from "./food-search.js";
+import {
+  rankFoods,
+  searchTokens,
+  type FoodSearchFilters,
+} from "./food-search.js";
 
 export class FoodRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -34,20 +38,39 @@ export class FoodRepository {
       ),
       OR: [
         { canonicalName: { contains: value, mode: "insensitive" as const } },
-        { normalizedName: { contains: normalized, mode: "insensitive" as const } },
+        {
+          normalizedName: {
+            contains: normalized,
+            mode: "insensitive" as const,
+          },
+        },
         { nameVi: { contains: value, mode: "insensitive" as const } },
         { nameEn: { contains: value, mode: "insensitive" as const } },
         ...tokens.flatMap((token) => [
           { normalizedName: { contains: token, mode: "insensitive" as const } },
           { nameEn: { contains: token, mode: "insensitive" as const } },
-          { aliases: { some: { normalizedAlias: { contains: token, mode: "insensitive" as const } } } },
+          {
+            aliases: {
+              some: {
+                normalizedAlias: {
+                  contains: token,
+                  mode: "insensitive" as const,
+                },
+              },
+            },
+          },
         ]),
         {
           aliases: {
             some: {
               OR: [
                 { alias: { contains: value, mode: "insensitive" as const } },
-                { normalizedAlias: { contains: normalized, mode: "insensitive" as const } },
+                {
+                  normalizedAlias: {
+                    contains: normalized,
+                    mode: "insensitive" as const,
+                  },
+                },
               ],
             },
           },

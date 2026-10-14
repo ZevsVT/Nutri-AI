@@ -6,7 +6,13 @@ export interface FoodSearchCandidate {
   normalizedName?: string | null;
   nameVi: string;
   nameEn?: string | null;
-  aliases?: readonly { alias: string; normalizedAlias?: string | null; language?: string | null }[] | readonly string[];
+  aliases?:
+    | readonly {
+        alias: string;
+        normalizedAlias?: string | null;
+        language?: string | null;
+      }[]
+    | readonly string[];
   [key: string]: unknown;
 }
 
@@ -50,15 +56,23 @@ const similarity = (left: string, right: string): number => {
   return length ? 1 - levenshtein(left, right) / length : 1;
 };
 
-const fieldValues = (food: FoodSearchCandidate): Array<{ value: string; weight: number }> => {
+const fieldValues = (
+  food: FoodSearchCandidate,
+): Array<{ value: string; weight: number }> => {
   const aliases = (food.aliases ?? []).map((alias) =>
     typeof alias === "string"
       ? { value: normalizeFoodText(alias), weight: 820 }
-      : { value: normalizeFoodText(alias.normalizedAlias ?? alias.alias), weight: alias.language === "en" ? 760 : 820 },
+      : {
+          value: normalizeFoodText(alias.normalizedAlias ?? alias.alias),
+          weight: alias.language === "en" ? 760 : 820,
+        },
   );
   return [
     { value: normalizeFoodText(food.canonicalName ?? ""), weight: 980 },
-    { value: normalizeFoodText(food.normalizedName ?? food.nameVi), weight: 950 },
+    {
+      value: normalizeFoodText(food.normalizedName ?? food.nameVi),
+      weight: 950,
+    },
     { value: normalizeFoodText(food.nameVi), weight: 940 },
     { value: normalizeFoodText(food.nameEn ?? ""), weight: 760 },
     ...aliases,
@@ -73,23 +87,36 @@ export function scoreFood(food: FoodSearchCandidate, query: string): number {
   const fields = fieldValues(food);
   let best = 0;
   for (const field of fields) {
-    if (field.value === normalizedQuery) best = Math.max(best, field.weight + 100);
-    else if (field.value.startsWith(normalizedQuery)) best = Math.max(best, field.weight + 60);
-    else if (field.value.includes(normalizedQuery)) best = Math.max(best, field.weight + 30);
+    if (field.value === normalizedQuery)
+      best = Math.max(best, field.weight + 100);
+    else if (field.value.startsWith(normalizedQuery))
+      best = Math.max(best, field.weight + 60);
+    else if (field.value.includes(normalizedQuery))
+      best = Math.max(best, field.weight + 30);
 
     const fieldTokens = field.value.split(" ");
     const matchedTokens = queryTokens.filter((token) =>
-      fieldTokens.some((candidate) => candidate === token || candidate.startsWith(token)),
+      fieldTokens.some(
+        (candidate) => candidate === token || candidate.startsWith(token),
+      ),
     ).length;
-    if (matchedTokens === queryTokens.length) best = Math.max(best, field.weight + 20);
+    if (matchedTokens === queryTokens.length)
+      best = Math.max(best, field.weight + 20);
 
     // Do not make one- or two-character terms fuzzy: they produce noisy results.
     if (normalizedQuery.length >= 3) {
       const distance = levenshtein(normalizedQuery, field.value);
-      const maxDistance = normalizedQuery.length <= 5 ? 1 : Math.floor(normalizedQuery.length * 0.25);
-      if (distance <= maxDistance) best = Math.max(best, field.weight - 80 - distance * 10);
+      const maxDistance =
+        normalizedQuery.length <= 5
+          ? 1
+          : Math.floor(normalizedQuery.length * 0.25);
+      if (distance <= maxDistance)
+        best = Math.max(best, field.weight - 80 - distance * 10);
       const fuzzyToken = queryTokens.every((token) =>
-        fieldTokens.some((candidate) => candidate.length >= 3 && similarity(token, candidate) >= 0.7),
+        fieldTokens.some(
+          (candidate) =>
+            candidate.length >= 3 && similarity(token, candidate) >= 0.7,
+        ),
       );
       if (fuzzyToken) best = Math.max(best, field.weight - 100);
     }
@@ -97,13 +124,23 @@ export function scoreFood(food: FoodSearchCandidate, query: string): number {
   return best;
 }
 
-export function rankFoods<T extends FoodSearchCandidate>(foods: readonly T[], query: string): RankedFood<T>[] {
+export function rankFoods<T extends FoodSearchCandidate>(
+  foods: readonly T[],
+  query: string,
+): RankedFood<T>[] {
   return foods
     .map((item) => ({ item, score: scoreFood(item, query) }))
     .filter((result) => result.score > 0)
-    .sort((a, b) => b.score - a.score || a.item.nameVi.localeCompare(b.item.nameVi, "vi") || a.item.id.localeCompare(b.item.id));
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.item.nameVi.localeCompare(b.item.nameVi, "vi") ||
+        a.item.id.localeCompare(b.item.id),
+    );
 }
 
 export function searchTokens(query: string): string[] {
-  return normalizeFoodText(query).split(" ").filter((token) => token.length >= 2);
+  return normalizeFoodText(query)
+    .split(" ")
+    .filter((token) => token.length >= 2);
 }

@@ -3,8 +3,18 @@ import { test } from "node:test";
 import { rankFoods, scoreFood } from "../src/modules/foods/food-search.js";
 
 const foods = [
-  { id: "pho", nameVi: "Phở bò", nameEn: "Beef pho", aliases: [{ alias: "phở", language: "vi" }] },
-  { id: "bun", nameVi: "Bún bò Huế", nameEn: "Hue beef noodle soup", aliases: [{ alias: "bun bo hue", language: "vi" }] },
+  {
+    id: "pho",
+    nameVi: "Phở bò",
+    nameEn: "Beef pho",
+    aliases: [{ alias: "phở", language: "vi" }],
+  },
+  {
+    id: "bun",
+    nameVi: "Bún bò Huế",
+    nameEn: "Hue beef noodle soup",
+    aliases: [{ alias: "bun bo hue", language: "vi" }],
+  },
   { id: "goi", nameVi: "Gỏi cuốn", nameEn: "Fresh spring rolls", aliases: [] },
 ];
 
@@ -16,5 +26,8 @@ test("food ranking prefers exact, normalized, alias, and then fuzzy matches", ()
 });
 
 test("short fuzzy queries do not return unrelated foods", () => {
-  assert.equal(rankFoods(foods, "bo").some(({ item }) => item.id === "goi"), false);
+  assert.equal(
+    rankFoods(foods, "bo").some(({ item }) => item.id === "goi"),
+    false,
+  );
 });
