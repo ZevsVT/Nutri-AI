@@ -1,4 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { ReviewWorkspace } from "../admin/ReviewWorkspace";
+import { Button } from "../common/Button";
+import { getCurrentUser, type AuthUser } from "../../services/authService";
 import { Sidebar, primaryNav } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { BottomNav } from "./BottomNav";
@@ -27,6 +30,10 @@ const initialChatMessages: ChatMessage[] = [
 ];
 
 export function AppShell() {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  useEffect(() => {
+    getCurrentUser().then(r => setAuthUser(r.user)).catch(() => {});
+  }, []);
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [meals, setMeals] = useState<Meal[]>(initialMeals);
   const [userProfile, setUserProfile] = useState<UserProfile>(initialUserProfile);
@@ -40,6 +47,7 @@ export function AppShell() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
   const activeTitle = useMemo(() => {
+    if (activeView === "food-reviews") return "Food data reviews";
     if (activeView === "profile") return "Profile & Settings";
     const found = primaryNav.find((item) => item.id === activeView);
     return found ? found.label : "Dashboard";
@@ -140,6 +148,12 @@ export function AppShell() {
         />
 
         <main className="page-content-wrapper">
+          {activeView !== "food-reviews" && (
+            <Button onClick={() => handleNavigate("food-reviews")}>
+              {authUser?.permissions.includes("food-reviews:read") ? "Food data reviews" : "Staff sign in"}
+            </Button>
+          )}
+          {activeView === "food-reviews" && <ReviewWorkspace onSession={setAuthUser} />}
           {activeView === "dashboard" && (
             <DashboardView
               meals={meals}

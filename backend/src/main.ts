@@ -6,6 +6,8 @@ import { installSignalHandlers } from "./app/shutdown.js";
 import { loadConfig } from "./config/env.js";
 import { createPrismaDatabase } from "./integrations/database/prisma-database.js";
 import { PrismaAuthRepository } from "./modules/auth/auth.repository.js";
+import { ReviewRepository } from "./modules/food-reviews/review.repository.js";
+import { ReviewService } from "./modules/food-reviews/review.service.js";
 import { PrismaBusinessApiService } from "./modules/api/api.service.js";
 import {
   InMemoryStorageObjectRepository,
@@ -37,6 +39,9 @@ try {
     config,
     authRepository: database
       ? new PrismaAuthRepository(database.client)
+      : undefined,
+    reviewService: database
+      ? new ReviewService(new ReviewRepository(database.client))
       : undefined,
     businessApiService: database
       ? new PrismaBusinessApiService(database.client, undefined, storageService)

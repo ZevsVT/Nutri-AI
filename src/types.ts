@@ -5,7 +5,8 @@ export type View =
   | "insights"
   | "assistant"
   | "recipes"
-  | "profile";
+  | "profile"
+  | "food-reviews";
 
 export type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack";
 
