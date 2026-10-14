@@ -1,13 +1,29 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { AppError } from "../../common/errors/app-error.js";
+import { type BarcodeProvider } from "../../integrations/barcode/barcode-provider.js";
 import {
-  NoopBarcodeProvider,
-  type BarcodeProvider,
-} from "../../integrations/barcode/barcode-provider.js";
+  BarcodeService,
+  InMemoryBarcodeProvider,
+  PrismaBarcodeProvider,
+  type BarcodeScanResult,
+} from "../foods/barcode.service.js";
+import {
+  packagedFoodCatalog,
+  memoryCatalogProducts,
+  catalogNutritionRecord,
+} from "../foods/packaged-food-catalog.js";
+import {
+  latestNutrition,
+  nutritionDto,
+  scaledNutrition,
+  nullableNumber,
+  nutritionValues,
+  type NutritionRecordLike,
+} from "../nutrition/nutrition-record.js";
 import type { StorageService } from "../storage/storage.service.js";
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
-import { canonicalBarcode, validBarcode } from "../foods/barcode.js";
+import { activeFoodWhere } from "../foods/food.repository.js";
 import {
   rankFoods,
   searchTokens,
@@ -15,17 +31,12 @@ import {
 } from "../foods/food-search.js";
 
 export interface NutritionTotals {
-  calories: number;
-  protein: number;
-  carbohydrates: number;
-  fat: number;
-  fiber: number;
+  calories: number | null;
+  protein: number | null;
+  carbohydrates: number | null;
+  fat: number | null;
+  fiber: number | null;
 }
-interface ScaledNutrition extends NutritionTotals {
-  sugar: number;
-  sodium: number;
-}
-
 export interface FoodDto {
   id: string;
   name: { vi: string; en: string | null };
@@ -157,10 +168,7 @@ export interface BusinessApiService {
     userId: string,
     input: { page: number; pageSize: number },
   ): Promise<{ data: Record<string, unknown>[]; total: number }>;
-  scanBarcode(
-    userId: string,
-    barcode: string,
-  ): Promise<Record<string, unknown>>;
+  scanBarcode(userId: string, barcode: string): Promise<BarcodeScanResult>;
 }
 
 const emptyTotals = (): NutritionTotals => ({
@@ -170,15 +178,34 @@ const emptyTotals = (): NutritionTotals => ({
   fat: 0,
   fiber: 0,
 });
+const unknownTotals = (): NutritionTotals => ({
+  calories: null,
+  protein: null,
+  carbohydrates: null,
+  fat: null,
+  fiber: null,
+});
 const addTotals = (
   left: NutritionTotals,
   right: NutritionTotals,
 ): NutritionTotals => ({
-  calories: left.calories + right.calories,
-  protein: left.protein + right.protein,
-  carbohydrates: left.carbohydrates + right.carbohydrates,
-  fat: left.fat + right.fat,
-  fiber: left.fiber + right.fiber,
+  calories:
+    left.calories === null || right.calories === null
+      ? null
+      : left.calories + right.calories,
+  protein:
+    left.protein === null || right.protein === null
+      ? null
+      : left.protein + right.protein,
+  carbohydrates:
+    left.carbohydrates === null || right.carbohydrates === null
+      ? null
+      : left.carbohydrates + right.carbohydrates,
+  fat: left.fat === null || right.fat === null ? null : left.fat + right.fat,
+  fiber:
+    left.fiber === null || right.fiber === null
+      ? null
+      : left.fiber + right.fiber,
 });
 const pageOf = <T>(rows: T[], page: number, pageSize: number) =>
   rows.slice((page - 1) * pageSize, page * pageSize);
@@ -189,7 +216,8 @@ interface MemoryFood {
   category: string | null;
   cuisine: string | null;
   aliases: string[];
-  nutrition: NutritionTotals;
+  nutrition: NutritionTotals | null;
+  record?: NutritionRecordLike | null;
   foodType?: string;
   subcategory?: string;
   region?: string;
@@ -203,26 +231,6 @@ interface MemoryAnalysis extends AnalysisDto {
   userId: string;
   corrections?: MealItemInput[];
 }
-type NutritionRecordLike = {
-  isActive?: boolean;
-  nutritionVersionId: string;
-  servingAmount: unknown;
-  servingUnit: string;
-  calories: unknown;
-  protein: unknown;
-  carbohydrates: unknown;
-  fat: unknown;
-  fiber: unknown;
-  sugar: unknown;
-  sodium: unknown;
-  nutritionVersion: {
-    sourceId: string;
-    effectiveFrom: Date;
-    effectiveTo?: Date | null;
-    version: string;
-    source: { name: string; provider: string };
-  };
-};
 type MealItemLike = {
   id: string;
   foodId: string | null;
@@ -260,7 +268,9 @@ type PredictionLike = {
 /** Deterministic service used when the app is booted without DATABASE_URL and in API contract tests. */
 export class InMemoryBusinessApiService implements BusinessApiService {
   constructor(
-    private readonly barcodeProvider: BarcodeProvider = new NoopBarcodeProvider(),
+    private readonly barcodeProvider: BarcodeProvider = new InMemoryBarcodeProvider(
+      memoryCatalogProducts(),
+    ),
     private readonly storageService?: StorageService,
   ) {}
   private readonly foods: MemoryFood[] = [
@@ -273,6 +283,21 @@ export class InMemoryBusinessApiService implements BusinessApiService {
       nutrition: emptyTotals(),
     },
   ];
+  private readonly catalogFoods: MemoryFood[] = packagedFoodCatalog
+    .filter((entry) => entry.status === "ACTIVE")
+    .map((entry) => {
+      const record = catalogNutritionRecord(entry);
+      return {
+        id: entry.foodId,
+        name: { vi: entry.nameVi, en: entry.nameEn },
+        category: entry.category,
+        cuisine: null,
+        foodType: "PACKAGED_FOOD",
+        aliases: entry.aliases,
+        nutrition: record ? nutritionValues(record) : null,
+        record,
+      };
+    });
   private readonly meals: MemoryMeal[] = [];
   private readonly analyses: MemoryAnalysis[] = [];
   private readonly water: Array<
@@ -293,7 +318,7 @@ export class InMemoryBusinessApiService implements BusinessApiService {
   }) {
     const value = normalizeFoodText(query);
     if (!value) return { data: [], total: 0 };
-    const candidates = this.foods
+    const candidates = [...this.foods, ...this.catalogFoods]
       .filter((food) =>
         Object.entries(filters ?? {}).every(
           ([key, expected]) =>
@@ -307,7 +332,11 @@ export class InMemoryBusinessApiService implements BusinessApiService {
         aliases: food.aliases.map((alias) => ({ alias })),
       }));
     const found = rankFoods(candidates, value)
-      .map(({ item }) => this.foods.find((food) => food.id === item.id))
+      .map(({ item }) =>
+        [...this.foods, ...this.catalogFoods].find(
+          (food) => food.id === item.id,
+        ),
+      )
       .filter((food): food is MemoryFood => Boolean(food));
     return {
       data: pageOf(found, page, pageSize).map((food) => this.publicFood(food)),
@@ -316,7 +345,9 @@ export class InMemoryBusinessApiService implements BusinessApiService {
   }
 
   async getFood(_userId: string, id: string) {
-    const food = this.foods.find((candidate) => candidate.id === id);
+    const food = [...this.foods, ...this.catalogFoods].find(
+      (candidate) => candidate.id === id,
+    );
     if (!food) throw new AppError("FOOD_NOT_FOUND", "Food was not found");
     return this.publicFood(food, true);
   }
@@ -555,13 +586,7 @@ export class InMemoryBusinessApiService implements BusinessApiService {
     return { data: [], total: 0 };
   }
   async scanBarcode(_userId: string, barcode: string) {
-    const product = await this.barcodeProvider.lookup(barcode);
-    return {
-      barcode,
-      status: product ? "RESOLVED" : "UNRESOLVED",
-      product,
-      source: product?.source ?? null,
-    };
+    return new BarcodeService(this.barcodeProvider).scan(barcode);
   }
 
   private findMeal(userId: string, id: string) {
@@ -585,13 +610,22 @@ export class InMemoryBusinessApiService implements BusinessApiService {
   private toMealItem(item: MealItemInput) {
     if (item.quantity <= 0)
       throw new AppError("VALIDATION_ERROR", "Quantity must be positive");
-    const food = this.foods.find((candidate) => candidate.id === item.foodId);
+    const food = [...this.foods, ...this.catalogFoods].find(
+      (candidate) => candidate.id === item.foodId,
+    );
     if (!food) throw new AppError("FOOD_NOT_FOUND", "Food was not found");
+    if (food.nutrition === null)
+      throw new AppError(
+        "NUTRITION_DATA_UNAVAILABLE",
+        "Nutrition data is unavailable for this food",
+      );
     return {
       ...item,
       id: randomUUID(),
       displayName: item.displayName ?? food.name.vi,
-      nutrition: emptyTotals(),
+      nutrition: food.record
+        ? scaledNutrition(food.record, item.quantity, item.unit)
+        : emptyTotals(),
     };
   }
   private publicFood(food: MemoryFood, includeNutrition = false): FoodDto {
@@ -600,7 +634,14 @@ export class InMemoryBusinessApiService implements BusinessApiService {
       name: food.name,
       category: food.category,
       cuisine: food.cuisine,
-      ...(includeNutrition ? { nutrition: { ...food.nutrition } } : {}),
+      foodType: food.foodType,
+      ...(includeNutrition && food.nutrition
+        ? {
+            nutrition: food.record
+              ? nutritionDto(food.record)
+              : { ...food.nutrition },
+          }
+        : {}),
     };
   }
   private publicMeal(meal: MemoryMeal): MealDto {
@@ -635,7 +676,9 @@ export class InMemoryBusinessApiService implements BusinessApiService {
 export class PrismaBusinessApiService implements BusinessApiService {
   constructor(
     public readonly prisma: PrismaClient,
-    private readonly barcodeProvider: BarcodeProvider = new NoopBarcodeProvider(),
+    private readonly barcodeProvider: BarcodeProvider = new PrismaBarcodeProvider(
+      prisma,
+    ),
     private readonly storageService?: StorageService,
   ) {}
 
@@ -661,7 +704,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
         .map(([key, value]) => [key, value]),
     );
     const where = {
-      isActive: true,
+      AND: activeFoodWhere,
       ...filterWhere,
       OR: [
         { canonicalName: { contains: query, mode: "insensitive" as const } },
@@ -713,7 +756,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
     const candidates = await this.prisma.food.findMany({
       where: {
         ...filterWhere,
-        isActive: true,
+        AND: activeFoodWhere,
         OR: [
           ...where.OR,
           ...(prefix
@@ -742,7 +785,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
 
   async getFood(_userId: string, id: string) {
     const food = await this.prisma.food.findFirst({
-      where: { id, isActive: true },
+      where: { id, AND: activeFoodWhere },
       include: {
         packagedProduct: true,
         nutritionRecords: {
@@ -759,7 +802,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
       const foods = await tx.food.findMany({
         where: {
           id: { in: input.items.map((item) => item.foodId) },
-          isActive: true,
+          AND: activeFoodWhere,
         },
         include: {
           packagedProduct: true,
@@ -787,16 +830,20 @@ export class PrismaBusinessApiService implements BusinessApiService {
       const totals = emptyTotals();
       for (const item of input.items) {
         const food = foods.find((candidate) => candidate.id === item.foodId);
-        const nutrition = this.latestNutrition(
+        const nutrition = latestNutrition(
           food?.nutritionRecords ?? [],
-          food?.packagedProduct,
+          food?.packagedProduct?.currentNutritionVersionId,
         );
         if (!food || !nutrition)
           throw new AppError(
             "NUTRITION_DATA_UNAVAILABLE",
             "Nutrition data is unavailable for one or more foods",
           );
-        const itemNutrition = this.scaledNutrition(nutrition, item.quantity);
+        const itemNutrition = scaledNutrition(
+          nutrition,
+          item.quantity,
+          item.unit,
+        );
         Object.assign(totals, addTotals(totals, itemNutrition));
         const createdItem = await tx.mealItem.create({
           data: {
@@ -815,7 +862,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
             servingAmount: item.quantity,
             servingUnit: item.unit,
             ...itemNutrition,
-            estimated: false,
+            estimated: nutrition.mappingType !== "EXACT_MATCH",
           },
         });
       }
@@ -1007,7 +1054,10 @@ export class PrismaBusinessApiService implements BusinessApiService {
       if (!meal) throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
       if (meal.status === "CONFIRMED" && meal.confirmedAt) return meal.id;
       const foods = await tx.food.findMany({
-        where: { id: { in: items.map((item) => item.foodId) }, isActive: true },
+        where: {
+          id: { in: items.map((item) => item.foodId) },
+          AND: activeFoodWhere,
+        },
         include: {
           packagedProduct: true,
           nutritionRecords: {
@@ -1024,16 +1074,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
       const totals = emptyTotals();
       for (const item of items) {
         const food = foods.find((candidate) => candidate.id === item.foodId);
-        const nutrition = this.latestNutrition(
+        const nutrition = latestNutrition(
           food?.nutritionRecords ?? [],
-          food?.packagedProduct,
+          food?.packagedProduct?.currentNutritionVersionId,
         );
         if (!food || !nutrition)
           throw new AppError(
             "NUTRITION_DATA_UNAVAILABLE",
             "Nutrition data is unavailable for one or more foods",
           );
-        const values = this.scaledNutrition(nutrition, item.quantity);
+        const values = scaledNutrition(nutrition, item.quantity, item.unit);
         Object.assign(totals, addTotals(totals, values));
         const created = await tx.mealItem.create({
           data: {
@@ -1052,7 +1102,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
             servingAmount: item.quantity,
             servingUnit: item.unit,
             ...values,
-            estimated: false,
+            estimated: nutrition.mappingType !== "EXACT_MATCH",
           },
         });
         await tx.aICorrection.create({
@@ -1211,38 +1261,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
     return { data: rows, total };
   }
   async scanBarcode(_userId: string, barcode: string) {
-    const mapping = await this.prisma.foodBarcode.findUnique({
-      where: {
-        barcode: validBarcode(barcode) ? canonicalBarcode(barcode) : barcode,
-      },
-      include: { food: { include: { packagedProduct: true } } },
-    });
-    if (mapping) {
-      const active = mapping.status === "ACTIVE" && mapping.food.isActive;
-      return {
-        barcode,
-        status: active ? "RESOLVED" : "UNRESOLVED",
-        product: active
-          ? {
-              foodId: mapping.foodId,
-              productName:
-                mapping.food.packagedProduct?.productName ??
-                mapping.food.nameVi,
-              brand: mapping.food.packagedProduct?.brand,
-              food: await this.getFood(_userId, mapping.foodId),
-              source: { provider: "reviewed_catalog" },
-            }
-          : null,
-        source: active ? { provider: "reviewed_catalog" } : null,
-      };
-    }
-    const product = await this.barcodeProvider.lookup(barcode);
-    return {
-      barcode,
-      status: product ? "RESOLVED" : "UNRESOLVED",
-      product,
-      source: product?.source ?? null,
-    };
+    return new BarcodeService(this.barcodeProvider).scan(barcode);
   }
 
   private foodDto(
@@ -1281,78 +1300,13 @@ export class PrismaBusinessApiService implements BusinessApiService {
           : Number(food.defaultServingSize),
     };
     if (includeNutrition && food.nutritionRecords?.length) {
-      const record = this.latestNutrition(
+      const record = latestNutrition(
         food.nutritionRecords,
-        food.packagedProduct,
+        food.packagedProduct?.currentNutritionVersionId,
       );
-      if (record)
-        dto.nutrition = {
-          servingAmount: Number(record.servingAmount),
-          servingUnit: record.servingUnit,
-          calories: record.calories == null ? null : Number(record.calories),
-          protein: record.protein == null ? null : Number(record.protein),
-          carbohydrates:
-            record.carbohydrates == null ? null : Number(record.carbohydrates),
-          fat: record.fat == null ? null : Number(record.fat),
-          fiber: record.fiber == null ? null : Number(record.fiber),
-          sugar: record.sugar == null ? null : Number(record.sugar),
-          sodium: record.sodium == null ? null : Number(record.sodium),
-          source: record.nutritionVersion.source.name,
-          provider: record.nutritionVersion.source.provider,
-          version: record.nutritionVersion.version,
-        };
+      if (record) dto.nutrition = nutritionDto(record);
     }
     return dto;
-  }
-  private latestNutrition(
-    records: readonly NutritionRecordLike[],
-    product?: { currentNutritionVersionId: string | null } | null,
-  ) {
-    return records
-      .filter(
-        (record) =>
-          record.isActive !== false &&
-          record.nutritionVersion.effectiveFrom <= new Date() &&
-          (!record.nutritionVersion.effectiveTo ||
-            record.nutritionVersion.effectiveTo > new Date()) &&
-          (!product ||
-            product.currentNutritionVersionId === record.nutritionVersionId),
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.nutritionVersion.effectiveFrom).getTime() -
-          new Date(a.nutritionVersion.effectiveFrom).getTime(),
-      )[0];
-  }
-  private scaledNutrition(
-    record: NutritionRecordLike,
-    quantity: number,
-  ): ScaledNutrition {
-    if (
-      [
-        record.calories,
-        record.protein,
-        record.carbohydrates,
-        record.fat,
-        record.fiber,
-        record.sugar,
-        record.sodium,
-      ].some((v) => v == null)
-    )
-      throw new AppError(
-        "NUTRITION_DATA_UNAVAILABLE",
-        "Incomplete nutrition cannot be confirmed as a numeric meal snapshot",
-      );
-    const factor = quantity / Number(record.servingAmount);
-    return {
-      calories: Number(record.calories) * factor,
-      protein: Number(record.protein) * factor,
-      carbohydrates: Number(record.carbohydrates) * factor,
-      fat: Number(record.fat) * factor,
-      fiber: Number(record.fiber) * factor,
-      sugar: Number(record.sugar) * factor,
-      sodium: Number(record.sodium) * factor,
-    };
   }
   private mealDto(meal: MealLike): MealDto {
     const items = meal.items.map((item) => ({
@@ -1363,11 +1317,11 @@ export class PrismaBusinessApiService implements BusinessApiService {
       displayName: item.displayName,
       nutrition: item.nutritionSnapshot
         ? {
-            calories: Number(item.nutritionSnapshot.calories),
-            protein: Number(item.nutritionSnapshot.protein),
-            carbohydrates: Number(item.nutritionSnapshot.carbohydrates),
-            fat: Number(item.nutritionSnapshot.fat),
-            fiber: Number(item.nutritionSnapshot.fiber),
+            calories: nullableNumber(item.nutritionSnapshot.calories),
+            protein: nullableNumber(item.nutritionSnapshot.protein),
+            carbohydrates: nullableNumber(item.nutritionSnapshot.carbohydrates),
+            fat: nullableNumber(item.nutritionSnapshot.fat),
+            fiber: nullableNumber(item.nutritionSnapshot.fiber),
           }
         : undefined,
     }));
@@ -1383,7 +1337,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
       items,
       totals: items.reduce(
         (sum: NutritionTotals, item) =>
-          addTotals(sum, item.nutrition ?? emptyTotals()),
+          addTotals(sum, item.nutrition ?? unknownTotals()),
         emptyTotals(),
       ),
     };
@@ -1442,13 +1396,15 @@ export class PrismaBusinessApiService implements BusinessApiService {
             sum,
             item.nutritionSnapshot
               ? {
-                  calories: Number(item.nutritionSnapshot.calories),
-                  protein: Number(item.nutritionSnapshot.protein),
-                  carbohydrates: Number(item.nutritionSnapshot.carbohydrates),
-                  fat: Number(item.nutritionSnapshot.fat),
-                  fiber: Number(item.nutritionSnapshot.fiber),
+                  calories: nullableNumber(item.nutritionSnapshot.calories),
+                  protein: nullableNumber(item.nutritionSnapshot.protein),
+                  carbohydrates: nullableNumber(
+                    item.nutritionSnapshot.carbohydrates,
+                  ),
+                  fat: nullableNumber(item.nutritionSnapshot.fat),
+                  fiber: nullableNumber(item.nutritionSnapshot.fiber),
                 }
-              : emptyTotals(),
+              : unknownTotals(),
           ),
         emptyTotals(),
       );

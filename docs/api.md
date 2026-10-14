@@ -52,7 +52,7 @@ request ID and server logs for diagnosis.
 | `GET /recipes` | Public | Published recipe browsing |
 | `POST/GET /water` | Required | Create and list water logs |
 | `GET /insights` | Required | User-owned transparent nutrition insights |
-| `POST /barcode/scan` | Required | Provider-neutral barcode lookup contract |
+| `POST /barcode/scan` | Required | Exact local GTIN lookup with canonical food, package and nutrition provenance |
 | `POST /storage/uploads` | Required | Validate and store one private JPEG, PNG, or WebP image |
 | `GET /storage/objects/:id` | Required | Authenticated image content read |
 | `GET /storage/objects/:id/url` | Required | Authenticated short-lived read URL or local API URL |
@@ -76,6 +76,23 @@ Image analysis references are stable `storage://object/{uuid}` values. The
 analysis service resolves them through the authenticated storage service before
 creating an analysis; client URLs, object keys, bucket names, and credentials
 are not accepted as image identity.
+
+## Packaged-food lookup
+
+Barcode scanning validates EAN-8, UPC-A, EAN-13 and GTIN-14 check digits and
+uses a unique 14-digit zero-padded local key. It preserves the submitted
+representation and the existing response fields, adding `normalizedBarcode`,
+canonical `foodId`, brand/variant, package and labeled-serving metadata, and
+explicit `AVAILABLE`, `PARTIAL` or `UNAVAILABLE` nutrition availability.
+Known identity can resolve without nutrition; unknown or inactive mappings
+return HTTP 200 `UNRESOLVED` with null product/source. The endpoint never saves
+a meal. See [packaged foods](packaged-foods.md) for examples, sources and imports.
+
+Unknown nutrients remain null in food and snapshot responses. Meal totals and
+daily/weekly totals are null for a nutrient when an included item lacks it;
+clients must display unknown values rather than coerce them to zero.
+Confirmation rejects incompatible consumed/reference units with HTTP 400
+`VALIDATION_ERROR`; mass and volume are never implicitly interchangeable.
 
 ## Stable error codes
 

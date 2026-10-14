@@ -245,8 +245,6 @@ model Food {
   components           FoodComponent[]    @relation("FoodComponents")
   componentOf          FoodComponent[]    @relation("FoodComponentOf")
   packagedProduct      PackagedProduct?
-  barcodes             FoodBarcode[]
-  reviews              FoodReview[]
 
   @@index([nameVi])
   @@index([foodType])
@@ -269,6 +267,42 @@ model FoodComponent {
 
   @@unique([foodId, componentFoodId])
   @@index([componentFoodId])
+}
+
+model PackagedProduct {
+  foodId                    String   @id @db.Uuid
+  importKey                 String   @unique @db.VarChar(160)
+  brand                     String   @db.VarChar(120)
+  variant                   String   @db.VarChar(160)
+  status                    String   @default("ACTIVE") @db.VarChar(24)
+  sourceId                  String   @unique @db.Uuid
+  sourceReference           String   @db.VarChar(240)
+  sourceVersion             String   @db.VarChar(80)
+  reviewedAt                DateTime @db.Timestamptz(3)
+  manifestHash              String   @db.VarChar(64)
+  currentNutritionVersionId String?  @db.Uuid
+
+  food                    Food              @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  source                  FoodSource        @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  currentNutritionVersion NutritionVersion? @relation(fields: [currentNutritionVersionId, sourceId], references: [id, sourceId], onDelete: Restrict)
+  barcodes                FoodBarcode[]
+}
+
+model FoodBarcode {
+  normalizedBarcode String   @id @db.VarChar(14)
+  barcode           String   @db.VarChar(14)
+  foodId            String   @db.Uuid
+  status            String   @default("ACTIVE") @db.VarChar(24)
+  packageQuantity   Decimal? @db.Decimal(12, 3)
+  packageUnit       String?  @db.VarChar(32)
+  unitsPerPack      Int      @default(1)
+  labeledServingQuantity Decimal? @db.Decimal(12, 3)
+  labeledServingUnit String? @db.VarChar(32)
+  sourceUrl         String   @db.Text
+
+  product PackagedProduct @relation(fields: [foodId], references: [foodId], onDelete: Restrict)
+
+  @@index([foodId])
 }
 
 model FoodAlias {
@@ -300,7 +334,7 @@ model FoodSource {
 
   nutritionVersions NutritionVersion[]
   mealItemSnapshots MealItemNutrition[] @relation("MealItemNutritionSource")
-  products          PackagedProduct[]
+  packagedProduct   PackagedProduct?
 
   @@unique([provider, name])
   @@index([provider])
@@ -313,6 +347,7 @@ model NutritionVersion {
   effectiveFrom DateTime  @db.Timestamptz(3)
   effectiveTo   DateTime? @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  metadata      Json?
 
   source            FoodSource          @relation(fields: [sourceId], references: [id], onDelete: Restrict)
   foodNutrition     FoodNutrition[]
@@ -331,6 +366,7 @@ model FoodNutrition {
   servingAmount      Decimal  @db.Decimal(12, 3)
   servingUnit        String   @db.VarChar(32)
   referenceBasis     NutritionReferenceBasis @default(PER_SERVING)
+  preparation        String   @default("AS_SOLD") @db.VarChar(24)
   calories           Decimal? @db.Decimal(12, 2)
   protein            Decimal? @db.Decimal(12, 3)
   carbohydrates      Decimal? @db.Decimal(12, 3)
@@ -536,13 +572,13 @@ model MealItemNutrition {
   sourceId           String   @db.Uuid
   servingAmount      Decimal  @db.Decimal(12, 3)
   servingUnit        String   @db.VarChar(32)
-  calories           Decimal  @db.Decimal(12, 2)
-  protein            Decimal  @db.Decimal(12, 3)
-  carbohydrates      Decimal  @db.Decimal(12, 3)
-  fat                Decimal  @db.Decimal(12, 3)
-  fiber              Decimal  @db.Decimal(12, 3)
-  sugar              Decimal  @db.Decimal(12, 3)
-  sodium             Decimal  @db.Decimal(12, 3)
+  calories           Decimal? @db.Decimal(12, 2)
+  protein            Decimal? @db.Decimal(12, 3)
+  carbohydrates      Decimal? @db.Decimal(12, 3)
+  fat                Decimal? @db.Decimal(12, 3)
+  fiber              Decimal? @db.Decimal(12, 3)
+  sugar              Decimal? @db.Decimal(12, 3)
+  sodium             Decimal? @db.Decimal(12, 3)
   estimated          Boolean  @default(true)
   confidence         Decimal? @db.Decimal(4, 3)
   createdAt          DateTime @default(now()) @db.Timestamptz(3)

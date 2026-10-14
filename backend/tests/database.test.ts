@@ -185,6 +185,8 @@ test("historical meal nutrition remains stable after a newer food nutrition vers
     const after = await prisma.mealItemNutrition.findUniqueOrThrow({
       where: { mealItemId },
     });
+    assert.ok(before.calories);
+    assert.ok(after.calories);
     assert.equal(after.calories.toString(), before.calories.toString());
     assert.equal(after.nutritionVersionId, versionAId);
     assert.notEqual(
