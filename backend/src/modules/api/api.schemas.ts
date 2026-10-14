@@ -24,6 +24,12 @@ export const foodSearchSchema = paginationSchema
   .extend({
     q: z.string().trim().max(160).default(""),
     locale: z.string().trim().min(2).max(16).default("vi"),
+    foodType: z.string().trim().min(1).max(100).optional(),
+    category: z.string().trim().min(1).max(100).optional(),
+    subcategory: z.string().trim().min(1).max(100).optional(),
+    region: z.string().trim().min(1).max(32).optional(),
+    cookingMethod: z.string().trim().min(1).max(32).optional(),
+    cuisine: z.string().trim().min(1).max(100).optional(),
   })
   .strict();
 export const idParamsSchema = z.object({ id }).strict();
