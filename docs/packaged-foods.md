@@ -262,9 +262,10 @@ controlled fixtures; source review is not repeated over the network in CI.
 - [x] Automated tests cover validation, lookup, imports, nutrition and API behavior.
 - [x] Documentation describes the implemented behavior.
 - [x] Frontend camera scanning remains explicitly simulated.
-- [ ] Hosted CI result: no push or workflow dispatch was performed. Local CI
-      equivalents are reported separately; the existing workflow runs the new
-      database tests when these changes are submitted.
+- [x] Hosted CI passed for implementation commit `76b7b5d`:
+      [GitHub Actions run 38592959307](https://github.com/ZevsVT/Nutri-AI/actions/runs/38592959307).
+      Frontend and backend validation passed, including 64 tests with zero
+      failures and zero skips, PostgreSQL migrations, and dependency audit.
 
 ## Local verification on 14 October 2026
 
