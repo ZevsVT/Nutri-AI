@@ -1,0 +1,98 @@
+[
+  {
+    "foodId": "ec8bd36c-cb32-4a95-8d71-923750017001",
+    "importKey": "vn:vinamilk:uht-sweetened-milk",
+    "canonicalName": "vinamilk-uht-sweetened-milk",
+    "nameVi": "Sữa tươi tiệt trùng Vinamilk có đường",
+    "nameEn": null,
+    "brand": "Vinamilk",
+    "variant": "Có đường",
+    "category": "BEVERAGE",
+    "aliases": ["Vinamilk có đường"],
+    "status": "ACTIVE",
+    "source": {
+      "provider": "7-Eleven Vietnam",
+      "reference": "sttt-vinamilk-co-duong-hop-1-l",
+      "version": "2026.10.14",
+      "url": "https://7-eleven.vn/san-pham/sttt-vinamilk-co-duong-hop-1-l",
+      "reviewedAt": "2026-10-14T00:00:00.000Z",
+      "usageConditions": "Factual identity metadata only; no images or descriptions reproduced; no dataset redistribution license asserted.",
+      "notes": "Retailer listing reviewed for name, brand, sweetened variant, barcode and 1 L single carton. Nutrition label not available; nutrition is explicitly unavailable."
+    },
+    "barcodes": [
+      {
+        "barcode": "8934673573399",
+        "status": "ACTIVE",
+        "sourceUrl": "https://7-eleven.vn/san-pham/sttt-vinamilk-co-duong-hop-1-l",
+        "package": { "quantity": 1000, "unit": "ml" },
+        "unitsPerPack": 1,
+        "labeledServing": null
+      }
+    ],
+    "nutrition": null
+  },
+  {
+    "foodId": "ec8bd36c-cb32-4a95-8d71-923750017002",
+    "importKey": "vn:oishi:spicy-prawn-snack",
+    "canonicalName": "oishi-spicy-prawn-snack",
+    "nameVi": "Snack Oishi tôm cay đặc biệt",
+    "nameEn": null,
+    "brand": "Oishi",
+    "variant": "Tôm cay đặc biệt",
+    "category": "SNACK",
+    "aliases": ["Oishi tôm cay"],
+    "status": "ACTIVE",
+    "source": {
+      "provider": "7-Eleven Vietnam",
+      "reference": "snack-oishi-tom-cay-dac-biet-68g",
+      "version": "2026.10.14",
+      "url": "https://7-eleven.vn/san-pham/snack-oishi-tom-cay-dac-biet-68g",
+      "reviewedAt": "2026-10-14T00:00:00.000Z",
+      "usageConditions": "Factual identity metadata only; no images or descriptions reproduced; no dataset redistribution license asserted.",
+      "notes": "Retailer listing reviewed for product identity and barcode. Heading says 68 g but responsibility text says 75 g: package quantity intentionally unknown until a matching label is reviewed. Nutrition label unavailable."
+    },
+    "barcodes": [
+      {
+        "barcode": "8934803042276",
+        "status": "ACTIVE",
+        "sourceUrl": "https://7-eleven.vn/san-pham/snack-oishi-tom-cay-dac-biet-68g",
+        "package": null,
+        "unitsPerPack": 1,
+        "labeledServing": null
+      }
+    ],
+    "nutrition": null
+  },
+  {
+    "foodId": "ec8bd36c-cb32-4a95-8d71-923750017003",
+    "importKey": "vn:chin-su:garlic-chilli-soy-sauce",
+    "canonicalName": "chin-su-garlic-chilli-soy-sauce",
+    "nameVi": "Nước tương Chin-su tỏi ớt",
+    "nameEn": null,
+    "brand": "Chin-su",
+    "variant": "Tỏi ớt",
+    "category": "CONDIMENT",
+    "aliases": ["Chinsu tỏi ớt"],
+    "status": "ACTIVE",
+    "source": {
+      "provider": "7-Eleven Vietnam",
+      "reference": "nuoc-tuong-chinsu-toi-ot-330ml",
+      "version": "2026.10.14",
+      "url": "https://7-eleven.vn/san-pham/nuoc-tuong-chinsu-toi-ot-330ml",
+      "reviewedAt": "2026-10-14T00:00:00.000Z",
+      "usageConditions": "Factual identity metadata only; no images or descriptions reproduced; no dataset redistribution license asserted.",
+      "notes": "Retailer listing reviewed for brand, garlic/chilli soy sauce variant, barcode and 330 ml bottle. Nutrition label not available; no salt-to-sodium inference."
+    },
+    "barcodes": [
+      {
+        "barcode": "8936136163734",
+        "status": "ACTIVE",
+        "sourceUrl": "https://7-eleven.vn/san-pham/nuoc-tuong-chinsu-toi-ot-330ml",
+        "package": { "quantity": 330, "unit": "ml" },
+        "unitsPerPack": 1,
+        "labeledServing": null
+      }
+    ],
+    "nutrition": null
+  }
+]

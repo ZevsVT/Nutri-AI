@@ -1,9 +1,28 @@
+import type { nutritionDto } from "../../modules/nutrition/nutrition-record.js";
+
 export interface BarcodeLookupResult {
   barcode: string;
-  productName?: string;
-  brand?: string;
-  nutrition?: Record<string, number>;
-  source?: { provider: string; version?: string };
+  foodId: string;
+  productName: string;
+  brand: string;
+  variant: string;
+  package: {
+    quantity: number | null;
+    unit: string | null;
+    unitsPerPack: number;
+  };
+  labeledServing: { quantity: number; unit: string } | null;
+  nutritionAvailability: "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
+  nutrition: ReturnType<typeof nutritionDto> | null;
+  source: {
+    provider: string;
+    name: string;
+    version: string;
+    reference: string;
+    url: string;
+    reviewedAt: string;
+    usageConditions: string | null;
+  };
 }
 
 /** Provider boundary for barcode services; the public API does not depend on a vendor SDK. */

@@ -1,19 +1,15 @@
 import type { PrismaClient } from "@prisma/client";
-import { validateNutrition } from "./nutrition-normalization.js";
+import {
+  validateNutrition,
+  type NutritionValues,
+} from "./nutrition-normalization.js";
 
-export interface NutritionSnapshotInput {
+export interface NutritionSnapshotInput extends NutritionValues {
   mealItemId: string;
   nutritionVersionId: string;
   sourceId: string;
   servingAmount: number;
   servingUnit: string;
-  calories: number;
-  protein: number;
-  carbohydrates: number;
-  fat: number;
-  fiber: number;
-  sugar: number;
-  sodium: number;
   estimated: boolean;
   confidence?: number;
 }

@@ -59,3 +59,17 @@ add only useful aliases, and run `npm test` plus `npm run db:seed`. The
 validator rejects duplicate slugs, duplicate stable IDs, and ambiguous alias
 normalizations. Regional specialties use `NORTH`, `CENTRAL`, or `SOUTH`;
 shared foods use `NATIONWIDE` rather than duplicated records.
+
+## Packaged products
+
+Packaged products use the existing `PACKAGED_FOOD` type and a relevant category
+such as `BEVERAGE`, `SNACK` or `CONDIMENT`. They remain canonical `Food` records
+and use the existing search ranking for product names and reviewed brand/variant
+aliases. Exact GTIN lookup is separate and never uses fuzzy text matching.
+
+Brand/formulation changes require separate identities; equivalent formulations
+may share a food ID across packages, with quantities and multipack counts stored
+on the correct barcode mapping. The focused importer preserves existing UUIDs,
+slugs and aliases and rejects transfers between products. See
+[packaged foods](packaged-foods.md) for the reviewed manifest, source evidence,
+nutrition availability, lifecycle policy and update commands.

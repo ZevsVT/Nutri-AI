@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { gtinSchema } from "../foods/barcode-normalization.js";
 import { paginationSchema } from "../../common/middleware/request-validation.js";
 
 const id = z.string().trim().min(1).max(128);
@@ -118,10 +119,7 @@ export const waterListSchema = withValidRange(
 export const insightsSchema = paginationSchema.strict();
 export const barcodeSchema = z
   .object({
-    barcode: z
-      .string()
-      .trim()
-      .regex(/^[0-9A-Za-z-]{6,64}$/),
+    barcode: gtinSchema,
   })
   .strict();
 
