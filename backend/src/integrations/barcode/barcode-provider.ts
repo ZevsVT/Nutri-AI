@@ -17,10 +17,10 @@ export interface BarcodeLookupResult {
   source: {
     provider: string;
     name: string;
-    version: string;
-    reference: string;
-    url: string;
-    reviewedAt: string;
+    version: string | null;
+    reference: string | null;
+    url: string | null;
+    reviewedAt: string | null;
     usageConditions: string | null;
   };
 }

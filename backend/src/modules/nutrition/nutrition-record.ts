@@ -14,6 +14,7 @@ export interface NutritionRecordLike {
   referenceBasis: ReferenceBasis;
   preparation: string;
   mappingType: NutritionMappingType;
+  isActive?: boolean;
   calories: unknown;
   protein: unknown;
   carbohydrates: unknown;
@@ -62,6 +63,7 @@ export function latestNutrition(
   return [...records]
     .filter(
       (record) =>
+        record.isActive !== false &&
         (currentVersionId === undefined ||
           record.nutritionVersionId === currentVersionId) &&
         record.nutritionVersion.effectiveFrom <= now &&

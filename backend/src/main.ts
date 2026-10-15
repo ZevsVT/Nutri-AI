@@ -8,6 +8,8 @@ import { createPrismaDatabase } from "./integrations/database/prisma-database.js
 import { PrismaAuthRepository } from "./modules/auth/auth.repository.js";
 import { PrismaBarcodeProvider } from "./modules/foods/barcode.service.js";
 import { PrismaBusinessApiService } from "./modules/api/api.service.js";
+import { ReviewRepository } from "./modules/food-reviews/review.repository.js";
+import { ReviewService } from "./modules/food-reviews/review.service.js";
 import {
   InMemoryStorageObjectRepository,
   PrismaStorageObjectRepository,

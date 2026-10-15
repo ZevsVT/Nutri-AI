@@ -928,6 +928,11 @@ test(
             (await scan()).json().data.product.foodId,
             productFoodId,
           );
+          assert.equal(
+            (await scan()).json().data.product.package.quantity,
+            250,
+          );
+          assert.equal((await scan()).json().data.source.reviewedAt, null);
           const equivalent = await create(
             { type: "ADD_BARCODE", barcode: "04006381333931" },
             productFoodId,
@@ -954,6 +959,10 @@ test(
             (await scan()).json().data.product.productName,
             "Reviewed package name",
           );
+          assert.equal(
+            (await scan()).json().data.product.package.quantity,
+            275,
+          );
           const productNutrition = await publish(
             nutrition("product-v1"),
             productFoodId,
@@ -979,7 +988,7 @@ test(
             },
             async () => {
               await prisma.foodBarcode.update({
-                where: { barcode: "04006381333931" },
+                where: { normalizedBarcode: "04006381333931" },
                 data: { status: "INACTIVE" },
               });
             },
@@ -1026,7 +1035,7 @@ test(
           assert.equal((await scan()).json().data.status, "RESOLVED");
           await assert.rejects(
             prisma.foodBarcode.update({
-              where: { barcode: "04006381333931" },
+              where: { normalizedBarcode: "04006381333931" },
               data: { foodId: food.id },
             }),
           );
@@ -1167,6 +1176,14 @@ test(
       await prisma.$executeRaw`INSERT INTO "FoodAlias" (id, "foodId", alias, "normalizedAlias") VALUES (${randomUUID()}::uuid, ${id}::uuid, 'Existing alias', 'existing alias')`;
       await prisma.$executeRaw`INSERT INTO "FoodSource" (id, name, provider, "sourceType", "updatedAt") VALUES (${sourceId}::uuid, 'Existing source', 'migration', 'CURATED', NOW())`;
       await prisma.$executeRaw`INSERT INTO "NutritionVersion" (id, "sourceId", version, "effectiveFrom") VALUES (${versionId}::uuid, ${sourceId}::uuid, 'existing-v1', NOW())`;
+      await prisma.$executeRaw`INSERT INTO "PackagedProduct" ("foodId", "importKey", brand, variant, "sourceId", "sourceReference", "sourceVersion", "reviewedAt", "manifestHash", "currentNutritionVersionId") VALUES (${id}::uuid, 'existing-product', 'Existing brand', 'Original', ${sourceId}::uuid, 'Existing label', 'existing-v1', NOW(), ${"a".repeat(64)}, ${versionId}::uuid)`;
+      await prisma.$executeRaw`INSERT INTO "FoodBarcode" ("normalizedBarcode", barcode, "foodId", "sourceUrl") VALUES ('04006381333931', '4006381333931', ${id}::uuid, 'https://example.com/existing-label')`;
+      const [productBefore] = await prisma.$queryRaw<
+        Record<string, unknown>[]
+      >`SELECT * FROM "PackagedProduct" WHERE "foodId" = ${id}::uuid`;
+      const [barcodeBefore] = await prisma.$queryRaw<
+        Record<string, unknown>[]
+      >`SELECT * FROM "FoodBarcode" WHERE "foodId" = ${id}::uuid`;
       await prisma.$executeRaw`INSERT INTO "FoodNutrition" (id, "foodId", "nutritionVersionId", "servingAmount", "servingUnit", calories, protein, carbohydrates, fat, "updatedAt") VALUES (${randomUUID()}::uuid, ${id}::uuid, ${versionId}::uuid, 100, 'g', 100, NULL, NULL, 0, NOW())`;
       await prisma.$executeRaw`INSERT INTO "Meal" (id, "userId", "mealType", "capturedAt", status, "updatedAt") VALUES (${mealId}::uuid, ${userId}::uuid, 'LUNCH', NOW(), 'CONFIRMED', NOW())`;
       await prisma.$executeRaw`INSERT INTO "MealItem" (id, "mealId", "foodId", quantity, unit, "displayName", "updatedAt") VALUES (${itemId}::uuid, ${mealId}::uuid, ${id}::uuid, 100, 'g', 'Historical food', NOW())`;
@@ -1195,6 +1212,21 @@ test(
         before,
       );
       assert.equal(await prisma.foodReview.count(), 0);
+      const productAfter = await prisma.packagedProduct.findUniqueOrThrow({
+        where: { foodId: id },
+      });
+      const barcodeAfter = await prisma.foodBarcode.findUniqueOrThrow({
+        where: { normalizedBarcode: "04006381333931" },
+      });
+      for (const [key, value] of Object.entries(productBefore!))
+        assert.deepEqual(productAfter[key as keyof typeof productAfter], value);
+      for (const [key, value] of Object.entries(barcodeBefore!))
+        assert.deepEqual(barcodeAfter[key as keyof typeof barcodeAfter], value);
+      assert.equal(
+        (await new ReviewRepository(prisma).food(id)).packagedProduct
+          ?.formulation,
+        "Original",
+      );
       assert.deepEqual(
         await prisma.$queryRaw`SELECT * FROM "MealItemNutrition" WHERE "mealItemId" = ${itemId}::uuid`,
         snapshotBefore,

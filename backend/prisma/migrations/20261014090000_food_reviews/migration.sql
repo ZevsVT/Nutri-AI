@@ -11,31 +11,27 @@ ALTER TABLE "FoodAlias" ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "FoodNutrition" ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true,
 ADD COLUMN     "preparationState" VARCHAR(100);
 
--- CreateTable
-CREATE TABLE "PackagedProduct" (
-    "foodId" UUID NOT NULL,
-    "brand" VARCHAR(160) NOT NULL,
-    "formulation" VARCHAR(160) NOT NULL,
-    "productName" VARCHAR(160) NOT NULL,
-    "packageQuantity" DECIMAL(12,3) NOT NULL,
-    "packageUnit" VARCHAR(16) NOT NULL,
-    "sourceId" UUID NOT NULL,
-    "currentNutritionVersionId" UUID,
-    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
+-- Extend the packaged-food catalog instead of recreating its tables.
+ALTER TABLE "PackagedProduct"
+    ALTER COLUMN "brand" TYPE VARCHAR(160),
+    ALTER COLUMN "importKey" DROP NOT NULL,
+    ALTER COLUMN "sourceReference" DROP NOT NULL,
+    ALTER COLUMN "sourceVersion" DROP NOT NULL,
+    ALTER COLUMN "reviewedAt" DROP NOT NULL,
+    ALTER COLUMN "manifestHash" DROP NOT NULL,
+    ADD COLUMN "formulation" VARCHAR(160),
+    ADD COLUMN "productName" VARCHAR(160),
+    ADD COLUMN "packageQuantity" DECIMAL(12,3),
+    ADD COLUMN "packageUnit" VARCHAR(16),
+    ADD COLUMN "updatedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "PackagedProduct" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "PackagedProduct" DROP CONSTRAINT "PackagedProduct_sourceId_key";
 
-    CONSTRAINT "PackagedProduct_pkey" PRIMARY KEY ("foodId")
-);
-
--- CreateTable
-CREATE TABLE "FoodBarcode" (
-    "barcode" VARCHAR(14) NOT NULL,
-    "foodId" UUID NOT NULL,
-    "status" VARCHAR(24) NOT NULL DEFAULT 'ACTIVE',
-    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
-
-    CONSTRAINT "FoodBarcode_pkey" PRIMARY KEY ("barcode")
-);
+ALTER TABLE "FoodBarcode"
+    ALTER COLUMN "sourceUrl" DROP NOT NULL,
+    ADD COLUMN "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN "updatedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "FoodBarcode" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- CreateTable
 CREATE TABLE "FoodReview" (
@@ -94,9 +90,6 @@ CREATE TABLE "FoodReviewAudit" (
 CREATE UNIQUE INDEX "PackagedProduct_brand_formulation_key" ON "PackagedProduct"("brand", "formulation");
 
 -- CreateIndex
-CREATE INDEX "FoodBarcode_foodId_idx" ON "FoodBarcode"("foodId");
-
--- CreateIndex
 CREATE UNIQUE INDEX "FoodReview_predecessorId_key" ON "FoodReview"("predecessorId");
 
 -- CreateIndex
@@ -113,18 +106,6 @@ CREATE INDEX "FoodReviewReservation_reviewId_idx" ON "FoodReviewReservation"("re
 
 -- CreateIndex
 CREATE INDEX "FoodReviewAudit_reviewId_createdAt_idx" ON "FoodReviewAudit"("reviewId", "createdAt");
-
--- AddForeignKey
-ALTER TABLE "PackagedProduct" ADD CONSTRAINT "PackagedProduct_foodId_fkey" FOREIGN KEY ("foodId") REFERENCES "Food"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PackagedProduct" ADD CONSTRAINT "PackagedProduct_sourceId_fkey" FOREIGN KEY ("sourceId") REFERENCES "FoodSource"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PackagedProduct" ADD CONSTRAINT "PackagedProduct_currentNutritionVersionId_sourceId_fkey" FOREIGN KEY ("currentNutritionVersionId", "sourceId") REFERENCES "NutritionVersion"("id", "sourceId") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "FoodBarcode" ADD CONSTRAINT "FoodBarcode_foodId_fkey" FOREIGN KEY ("foodId") REFERENCES "Food"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "FoodReview" ADD CONSTRAINT "FoodReview_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -169,7 +150,7 @@ BEGIN
       RAISE EXCEPTION 'Canonical identity is immutable' USING ERRCODE = '23514';
     END IF;
   ELSIF TG_TABLE_NAME = 'PackagedProduct' THEN
-    IF NEW."foodId" IS DISTINCT FROM OLD."foodId" OR NEW.brand IS DISTINCT FROM OLD.brand OR NEW.formulation IS DISTINCT FROM OLD.formulation OR NEW."sourceId" IS DISTINCT FROM OLD."sourceId" THEN
+    IF NEW."foodId" IS DISTINCT FROM OLD."foodId" OR NEW.brand IS DISTINCT FROM OLD.brand OR NEW.formulation IS DISTINCT FROM OLD.formulation OR NEW.variant IS DISTINCT FROM OLD.variant OR NEW."importKey" IS DISTINCT FROM OLD."importKey" OR NEW."sourceId" IS DISTINCT FROM OLD."sourceId" THEN
       RAISE EXCEPTION 'Product identity is immutable' USING ERRCODE = '23514';
     END IF;
   ELSE
@@ -181,7 +162,7 @@ BEGIN
         RAISE EXCEPTION 'Alias identity is immutable' USING ERRCODE = '23514';
       END IF;
     ELSE
-      IF NEW.barcode IS DISTINCT FROM OLD.barcode THEN
+      IF NEW.barcode IS DISTINCT FROM OLD.barcode OR NEW."normalizedBarcode" IS DISTINCT FROM OLD."normalizedBarcode" THEN
         RAISE EXCEPTION 'Barcode identity is immutable' USING ERRCODE = '23514';
       END IF;
     END IF;
@@ -194,6 +175,5 @@ CREATE TRIGGER alias_ownership_immutable BEFORE UPDATE ON "FoodAlias" FOR EACH R
 CREATE TRIGGER product_identity_immutable BEFORE UPDATE ON "PackagedProduct" FOR EACH ROW EXECUTE FUNCTION protect_catalog_identity();
 CREATE TRIGGER barcode_ownership_immutable BEFORE UPDATE ON "FoodBarcode" FOR EACH ROW EXECUTE FUNCTION protect_catalog_identity();
 
-ALTER TABLE "FoodBarcode" ADD CONSTRAINT "FoodBarcode_status_check" CHECK (status IN ('ACTIVE', 'INACTIVE', 'DEPRECATED'));
 ALTER TABLE "PackagedProduct" ADD CONSTRAINT "PackagedProduct_quantity_check" CHECK ("packageQuantity" > 0);
 ALTER TABLE "FoodReview" ADD CONSTRAINT "FoodReview_revision_check" CHECK (revision > 0);

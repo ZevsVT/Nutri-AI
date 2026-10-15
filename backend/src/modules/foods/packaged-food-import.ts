@@ -239,6 +239,7 @@ export async function importPackagedFoods(
             );
           if (
             existing &&
+            existing.reviewedAt &&
             new Date(entry.source.reviewedAt) < existing.reviewedAt
           )
             throw new Error(

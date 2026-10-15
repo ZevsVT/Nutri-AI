@@ -82,7 +82,7 @@ test(
       schemas.push(populatedSchema);
       populatedUrl.searchParams.set("schema", populatedSchema);
       for (const name of await readdir(resolve("prisma/migrations")))
-        if (name !== migrationName)
+        if (name < migrationName)
           await cp(
             resolve("prisma/migrations", name),
             join(directory, "migrations", name),
@@ -108,13 +108,7 @@ test(
           },
           select: { id: true },
         });
-        await client.foodAlias.create({
-          data: {
-            foodId,
-            alias: "Original alias",
-            normalizedAlias: "original alias",
-          },
-        });
+        await client.$executeRaw`INSERT INTO "FoodAlias" (id, "foodId", alias, "normalizedAlias") VALUES (${randomUUID()}::uuid, ${foodId}::uuid, 'Original alias', 'original alias')`;
         await client.foodSource.create({
           data: {
             id: sourceId,
@@ -175,9 +169,8 @@ test(
         const beforeFood = await client.food.findUniqueOrThrow({
           where: { id: foodId },
         });
-        const beforeAlias = await client.foodAlias.findMany({
-          where: { foodId },
-        });
+        const beforeAlias =
+          await client.$queryRaw`SELECT * FROM "FoodAlias" WHERE "foodId" = ${foodId}::uuid`;
         const beforeNutrition = await client.foodNutrition.findMany({
           where: { foodId },
           select: {
@@ -206,7 +199,7 @@ test(
           beforeFood,
         );
         assert.deepEqual(
-          await client.foodAlias.findMany({ where: { foodId } }),
+          await client.$queryRaw`SELECT * FROM "FoodAlias" WHERE "foodId" = ${foodId}::uuid`,
           beforeAlias,
         );
         assert.deepEqual(

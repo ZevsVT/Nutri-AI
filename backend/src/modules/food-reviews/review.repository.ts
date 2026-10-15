@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { AppError } from "../../common/errors/app-error.js";
 import { normalizeFoodText, slugifyFoodName } from "../foods/food-taxonomy.js";
+import { normalizeBarcode } from "../foods/barcode-normalization.js";
 import { normalizeNutrition } from "../nutrition/nutrition-normalization.js";
 import {
   nutrientFields,
@@ -38,8 +39,9 @@ const foodInclude = {
     orderBy: { id: "asc" as const },
     include: { nutritionVersion: { include: { source: true } } },
   },
-  packagedProduct: true,
-  barcodes: { orderBy: { barcode: "asc" as const } },
+  packagedProduct: {
+    include: { barcodes: { orderBy: { barcode: "asc" as const } } },
+  },
 };
 const reviewInclude = {
   revisions: { orderBy: { revision: "desc" as const }, take: 1 },
@@ -198,7 +200,17 @@ export class ReviewTransaction {
       include: foodInclude,
     });
     if (!food) throw new AppError("FOOD_NOT_FOUND", "Food was not found");
-    return food;
+    return {
+      ...food,
+      packagedProduct: food.packagedProduct
+        ? {
+            ...food.packagedProduct,
+            formulation:
+              food.packagedProduct.formulation ?? food.packagedProduct.variant,
+          }
+        : null,
+      barcodes: food.packagedProduct?.barcodes ?? [],
+    };
   }
 
   source(id: string) {
@@ -331,7 +343,7 @@ export class ReviewTransaction {
       });
       if (product)
         await this.tx.packagedProduct.create({
-          data: { foodId: food.id, ...product },
+          data: { foodId: food.id, variant: product.formulation, ...product },
         });
       return json({ foodId: food.id });
     }
@@ -492,7 +504,11 @@ export class ReviewTransaction {
         if (!food.packagedProduct)
           throw new AppError("CONFLICT", "Barcodes require a packaged product");
         await this.tx.foodBarcode.create({
-          data: { barcode: operation.barcode, foodId: food.id },
+          data: {
+            barcode: operation.barcode,
+            normalizedBarcode: normalizeBarcode(operation.barcode),
+            foodId: food.id,
+          },
         });
         break;
       case "SET_BARCODE_STATUS": {
