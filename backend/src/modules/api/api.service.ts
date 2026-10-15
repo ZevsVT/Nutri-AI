@@ -722,6 +722,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
           {
             aliases: {
               some: {
+                isActive: true,
                 normalizedAlias: {
                   contains: token,
                   mode: "insensitive" as const,
@@ -733,6 +734,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
         {
           aliases: {
             some: {
+              isActive: true,
               OR: [
                 { alias: { contains: query, mode: "insensitive" as const } },
                 {
@@ -769,7 +771,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
             : []),
         ],
       },
-      include: { aliases: true },
+      include: { aliases: { where: { isActive: true } } },
       take: 2_000,
     });
     const ranked = rankFoods(candidates, normalized);

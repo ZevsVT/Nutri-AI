@@ -128,27 +128,29 @@ enum InsightSeverity {
 }
 
 model User {
-  id          String     @id @default(uuid()) @db.Uuid
-  email       String     @unique @db.VarChar(320)
-  passwordHash String?   @db.VarChar(255)
-  name        String?    @db.VarChar(120)
-  avatarUrl   String?    @db.Text
-  role        UserRole   @default(USER)
-  status      UserStatus @default(ACTIVE)
-  lastLoginAt DateTime?  @db.Timestamptz(3)
-  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique @db.VarChar(320)
+  passwordHash String?    @db.VarChar(255)
+  name         String?    @db.VarChar(120)
+  avatarUrl    String?    @db.Text
+  role         UserRole   @default(USER)
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?  @db.Timestamptz(3)
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
 
-  preference    UserPreference?
-  consents      UserConsent[]
-  meals         Meal[]
-  aiAnalyses    AIAnalysis[]
-  aiCorrections AICorrection[]
-  waterLogs     WaterLog[]
-  insights      NutritionInsight[]
-  sessions      Session[]
-  passwordResets PasswordResetToken[]
-  storageObjects StoredObject[]
+  preference      UserPreference?
+  consents        UserConsent[]
+  meals           Meal[]
+  aiAnalyses      AIAnalysis[]
+  aiCorrections   AICorrection[]
+  waterLogs       WaterLog[]
+  insights        NutritionInsight[]
+  sessions        Session[]
+  passwordResets  PasswordResetToken[]
+  storageObjects  StoredObject[]
+  authoredReviews FoodReview[]         @relation("ReviewAuthor")
+  reviewEvents    FoodReviewAudit[]
 
   @@index([status])
 }
@@ -213,25 +215,25 @@ model UserConsent {
 }
 
 model Food {
-  id            String   @id @default(uuid()) @db.Uuid
-  canonicalName String   @unique @db.VarChar(160)
-  slug          String?  @unique @db.VarChar(160)
-  normalizedName String? @unique @db.VarChar(160)
-  nameVi        String   @db.VarChar(160)
-  nameEn        String?  @db.VarChar(160)
-  description   String?  @db.Text
-  category      String?  @db.VarChar(100)
-  subcategory   String?  @db.VarChar(100)
-  cuisine       String?  @db.VarChar(100)
-  foodType      String?  @db.VarChar(100)
-  region        String?  @db.VarChar(32)
-  cookingMethod String?  @db.VarChar(32)
-  servingUnit   String?  @db.VarChar(32)
+  id                 String   @id @default(uuid()) @db.Uuid
+  canonicalName      String   @unique @db.VarChar(160)
+  slug               String?  @unique @db.VarChar(160)
+  normalizedName     String?  @unique @db.VarChar(160)
+  nameVi             String   @db.VarChar(160)
+  nameEn             String?  @db.VarChar(160)
+  description        String?  @db.Text
+  category           String?  @db.VarChar(100)
+  subcategory        String?  @db.VarChar(100)
+  cuisine            String?  @db.VarChar(100)
+  foodType           String?  @db.VarChar(100)
+  region             String?  @db.VarChar(32)
+  cookingMethod      String?  @db.VarChar(32)
+  servingUnit        String?  @db.VarChar(32)
   defaultServingSize Decimal? @db.Decimal(12, 3)
-  status        String   @default("ACTIVE") @db.VarChar(24)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+  status             String   @default("ACTIVE") @db.VarChar(24)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
   aliases              FoodAlias[]
   nutritionRecords     FoodNutrition[]
@@ -243,6 +245,7 @@ model Food {
   components           FoodComponent[]    @relation("FoodComponents")
   componentOf          FoodComponent[]    @relation("FoodComponentOf")
   packagedProduct      PackagedProduct?
+  reviews              FoodReview[]
 
   @@index([nameVi])
   @@index([foodType])
@@ -268,35 +271,44 @@ model FoodComponent {
 }
 
 model PackagedProduct {
-  foodId                    String   @id @db.Uuid
-  importKey                 String   @unique @db.VarChar(160)
-  brand                     String   @db.VarChar(120)
-  variant                   String   @db.VarChar(160)
-  status                    String   @default("ACTIVE") @db.VarChar(24)
-  sourceId                  String   @unique @db.Uuid
-  sourceReference           String   @db.VarChar(240)
-  sourceVersion             String   @db.VarChar(80)
-  reviewedAt                DateTime @db.Timestamptz(3)
-  manifestHash              String   @db.VarChar(64)
-  currentNutritionVersionId String?  @db.Uuid
+  foodId                    String    @id @db.Uuid
+  importKey                 String?   @unique @db.VarChar(160)
+  brand                     String    @db.VarChar(160)
+  variant                   String    @db.VarChar(160)
+  formulation               String?   @db.VarChar(160)
+  productName               String?   @db.VarChar(160)
+  packageQuantity           Decimal?  @db.Decimal(12, 3)
+  packageUnit               String?   @db.VarChar(16)
+  status                    String    @default("ACTIVE") @db.VarChar(24)
+  sourceId                  String    @db.Uuid
+  sourceReference           String?   @db.VarChar(240)
+  sourceVersion             String?   @db.VarChar(80)
+  reviewedAt                DateTime? @db.Timestamptz(3)
+  manifestHash              String?   @db.VarChar(64)
+  currentNutritionVersionId String?   @db.Uuid
+  updatedAt                 DateTime  @updatedAt @db.Timestamptz(3)
 
   food                    Food              @relation(fields: [foodId], references: [id], onDelete: Restrict)
   source                  FoodSource        @relation(fields: [sourceId], references: [id], onDelete: Restrict)
   currentNutritionVersion NutritionVersion? @relation(fields: [currentNutritionVersionId, sourceId], references: [id, sourceId], onDelete: Restrict)
   barcodes                FoodBarcode[]
+
+  @@unique([brand, formulation])
 }
 
 model FoodBarcode {
-  normalizedBarcode String   @id @db.VarChar(14)
-  barcode           String   @db.VarChar(14)
-  foodId            String   @db.Uuid
-  status            String   @default("ACTIVE") @db.VarChar(24)
-  packageQuantity   Decimal? @db.Decimal(12, 3)
-  packageUnit       String?  @db.VarChar(32)
-  unitsPerPack      Int      @default(1)
+  normalizedBarcode      String   @id @db.VarChar(14)
+  barcode                String   @db.VarChar(14)
+  foodId                 String   @db.Uuid
+  status                 String   @default("ACTIVE") @db.VarChar(24)
+  packageQuantity        Decimal? @db.Decimal(12, 3)
+  packageUnit            String?  @db.VarChar(32)
+  unitsPerPack           Int      @default(1)
   labeledServingQuantity Decimal? @db.Decimal(12, 3)
-  labeledServingUnit String? @db.VarChar(32)
-  sourceUrl         String   @db.Text
+  labeledServingUnit     String?  @db.VarChar(32)
+  sourceUrl              String?  @db.Text
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
 
   product PackagedProduct @relation(fields: [foodId], references: [foodId], onDelete: Restrict)
 
@@ -309,6 +321,7 @@ model FoodAlias {
   alias           String   @db.VarChar(200)
   normalizedAlias String   @db.VarChar(200)
   language        String   @default("vi") @db.VarChar(10)
+  isActive        Boolean  @default(true)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
 
   food Food @relation(fields: [foodId], references: [id], onDelete: Restrict)
@@ -331,7 +344,7 @@ model FoodSource {
 
   nutritionVersions NutritionVersion[]
   mealItemSnapshots MealItemNutrition[] @relation("MealItemNutritionSource")
-  packagedProduct   PackagedProduct?
+  packagedProducts  PackagedProduct[]
 
   @@unique([provider, name])
   @@index([provider])
@@ -357,30 +370,120 @@ model NutritionVersion {
 }
 
 model FoodNutrition {
-  id                 String   @id @default(uuid()) @db.Uuid
-  foodId             String   @db.Uuid
-  nutritionVersionId String   @db.Uuid
-  servingAmount      Decimal  @db.Decimal(12, 3)
-  servingUnit        String   @db.VarChar(32)
+  id                 String                  @id @default(uuid()) @db.Uuid
+  foodId             String                  @db.Uuid
+  nutritionVersionId String                  @db.Uuid
+  servingAmount      Decimal                 @db.Decimal(12, 3)
+  servingUnit        String                  @db.VarChar(32)
   referenceBasis     NutritionReferenceBasis @default(PER_SERVING)
-  preparation        String   @default("AS_SOLD") @db.VarChar(24)
-  calories           Decimal? @db.Decimal(12, 2)
-  protein            Decimal? @db.Decimal(12, 3)
-  carbohydrates      Decimal? @db.Decimal(12, 3)
-  fat                Decimal? @db.Decimal(12, 3)
-  fiber              Decimal? @db.Decimal(12, 3)
-  sugar              Decimal? @db.Decimal(12, 3)
-  sodium             Decimal? @db.Decimal(12, 3)
-  confidence         Decimal? @db.Decimal(4, 3)
-  mappingType        NutritionMappingType @default(EXACT_MATCH)
-  createdAt          DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+  preparation        String                  @default("AS_SOLD") @db.VarChar(24)
+  calories           Decimal?                @db.Decimal(12, 2)
+  protein            Decimal?                @db.Decimal(12, 3)
+  carbohydrates      Decimal?                @db.Decimal(12, 3)
+  fat                Decimal?                @db.Decimal(12, 3)
+  fiber              Decimal?                @db.Decimal(12, 3)
+  sugar              Decimal?                @db.Decimal(12, 3)
+  sodium             Decimal?                @db.Decimal(12, 3)
+  confidence         Decimal?                @db.Decimal(4, 3)
+  mappingType        NutritionMappingType    @default(EXACT_MATCH)
+  isActive           Boolean                 @default(true)
+  preparationState   String?                 @db.VarChar(100)
+  createdAt          DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @db.Timestamptz(3)
 
   food             Food             @relation(fields: [foodId], references: [id], onDelete: Restrict)
   nutritionVersion NutritionVersion @relation(fields: [nutritionVersionId], references: [id], onDelete: Restrict)
 
   @@unique([foodId, nutritionVersionId])
   @@index([nutritionVersionId])
+  @@index([mappingType])
+  @@index([referenceBasis])
+}
+
+enum FoodReviewState {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum FoodReviewOperation {
+  CREATE_FOOD
+  UPDATE_FOOD
+  ADD_ALIAS
+  REMOVE_ALIAS
+  PUBLISH_NUTRITION
+  WITHDRAW_NUTRITION
+  UPDATE_PRODUCT
+  ADD_BARCODE
+  SET_BARCODE_STATUS
+  SET_FOOD_STATUS
+}
+
+model FoodReview {
+  id            String              @id @default(uuid()) @db.Uuid
+  operation     FoodReviewOperation
+  targetFoodId  String?             @db.Uuid
+  authorId      String              @db.Uuid
+  state         FoodReviewState     @default(DRAFT)
+  revision      Int                 @default(1)
+  predecessorId String?             @unique @db.Uuid
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @updatedAt @db.Timestamptz(3)
+  submittedAt   DateTime?           @db.Timestamptz(3)
+  decidedAt     DateTime?           @db.Timestamptz(3)
+
+  author       User                    @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  targetFood   Food?                   @relation(fields: [targetFoodId], references: [id], onDelete: Restrict)
+  predecessor  FoodReview?             @relation("ReviewSuccessor", fields: [predecessorId], references: [id], onDelete: Restrict)
+  successor    FoodReview?             @relation("ReviewSuccessor")
+  revisions    FoodReviewRevision[]
+  history      FoodReviewAudit[]
+  reservations FoodReviewReservation[]
+
+  @@index([state, createdAt])
+  @@index([targetFoodId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model FoodReviewRevision {
+  reviewId            String            @db.Uuid
+  revision            Int
+  payload             Json
+  baseline            Json
+  baselineFingerprint String            @db.VarChar(64)
+  evidence            Json
+  explanation         String            @db.VarChar(4000)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  review              FoodReview        @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  events              FoodReviewAudit[]
+
+  @@id([reviewId, revision])
+}
+
+model FoodReviewReservation {
+  key      String     @id @db.VarChar(400)
+  reviewId String     @db.Uuid
+  review   FoodReview @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+
+  @@index([reviewId])
+}
+
+model FoodReviewAudit {
+  id          String             @id @default(uuid()) @db.Uuid
+  reviewId    String             @db.Uuid
+  revision    Int
+  actorId     String             @db.Uuid
+  action      String             @db.VarChar(24)
+  reason      String?            @db.VarChar(4000)
+  publication Json?
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  review      FoodReview         @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  content     FoodReviewRevision @relation(fields: [reviewId, revision], references: [reviewId, revision], onDelete: Restrict)
+  actor       User               @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([reviewId, createdAt])
 }
 
 model Meal {

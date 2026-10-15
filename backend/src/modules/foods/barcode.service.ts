@@ -94,12 +94,14 @@ export class PrismaBarcodeProvider implements BarcodeProvider {
       return {
         barcode: mapping.barcode,
         foodId: product.foodId,
-        productName: product.food.nameVi,
+        productName: product.productName ?? product.food.nameVi,
         brand: product.brand,
         variant: product.variant,
         package: {
-          quantity: nullableNumber(mapping.packageQuantity),
-          unit: mapping.packageUnit,
+          quantity: nullableNumber(
+            mapping.packageQuantity ?? product.packageQuantity,
+          ),
+          unit: mapping.packageUnit ?? product.packageUnit,
           unitsPerPack: mapping.unitsPerPack,
         },
         labeledServing:
@@ -120,10 +122,11 @@ export class PrismaBarcodeProvider implements BarcodeProvider {
         source: {
           provider: product.source.provider,
           name: product.source.name,
-          version: product.sourceVersion,
-          reference: product.sourceReference,
-          url: mapping.sourceUrl,
-          reviewedAt: product.reviewedAt.toISOString(),
+          version:
+            product.sourceVersion ?? record?.nutritionVersion.version ?? null,
+          reference: product.sourceReference ?? product.source.sourceReference,
+          url: mapping.sourceUrl ?? product.source.sourceUrl,
+          reviewedAt: product.reviewedAt?.toISOString() ?? null,
           usageConditions: product.source.license,
         },
       };

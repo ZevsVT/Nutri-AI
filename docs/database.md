@@ -1,5 +1,11 @@
 # Nutri-AI database
 
+The additive food-review schema and migration are described in
+[food reviews](food-reviews.md#local-migrations-and-verification). Review revisions
+and audit are append-only; publication retains previous nutrition and meal snapshots.
+Packaged products/barcodes share the canonical Food model; see
+[packaged foods](packaged-foods.md).
+
 Issue #7 adds a PostgreSQL + Prisma persistence foundation to the modular
 Fastify backend. The frontend prototype remains mock-data driven until the API
 integration issues replace it; the database is designed to match the existing

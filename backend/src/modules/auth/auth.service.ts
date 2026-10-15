@@ -8,6 +8,7 @@ import type {
 import type { AppConfig } from "../../config/env.js";
 import { logAuthEvent } from "../../common/logging/events.js";
 import { hashPassword, verifyPassword } from "./password.js";
+import { permissionsForRole } from "../../common/types/permissions.js";
 import type {
   AuthRepository,
   AuthSessionRecord,
@@ -216,7 +217,7 @@ export function toSafeUser(user: AuthUserRecord): SafeUser {
     avatarUrl: user.avatarUrl,
     role: user.role,
     status: user.status,
-    permissions: [],
+    permissions: permissionsForRole(user.role),
   };
 }
 

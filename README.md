@@ -4,6 +4,10 @@ NutriAI is a responsive AI nutrition assistant prototype focused on one trustwor
 
 ## Run locally
 
+The administrative workspace uses the real backend and PostgreSQL. See
+[food review setup and staff provisioning](docs/food-reviews.md) for migrations,
+independent editor/reviewer accounts, API usage, and verification.
+
 ```bash
 npm install
 npm run dev

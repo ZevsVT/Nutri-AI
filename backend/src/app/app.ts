@@ -42,6 +42,8 @@ import {
   createStorageProvider,
 } from "../modules/storage/storage.service.js";
 import type { StorageProvider } from "../integrations/storage/storage-provider.js";
+import { registerReviewRoutes } from "../modules/food-reviews/review.controller.js";
+import type { ReviewService } from "../modules/food-reviews/review.service.js";
 import {
   MetricsRegistry,
   metricRoute,
@@ -62,6 +64,7 @@ export interface BuildAppOptions {
   storageProvider?: StorageProvider;
   storageObjectRepository?: StorageObjectRepository;
   storageService?: StorageService;
+  reviewService?: ReviewService;
 }
 
 const requestIdPattern = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -504,6 +507,7 @@ export async function buildApp(
     apiController,
     storageController,
   );
+  await registerReviewRoutes(app, options.reviewService);
   await options.registerAdditionalRoutes?.(app);
   readiness.markInitialized();
 

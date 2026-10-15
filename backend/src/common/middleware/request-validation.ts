@@ -24,7 +24,7 @@ function validationDetails(
 }
 
 export function parseOrThrow<T>(
-  schema: ZodType<T>,
+  schema: ZodType<T, z.ZodTypeDef, unknown>,
   input: unknown,
   target: ValidationTarget,
 ): T {

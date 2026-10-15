@@ -1,0 +1,157 @@
+.review-workspace {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  color: var(--text-primary);
+}
+.review-workspace header,
+.review-toolbar,
+.review-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.review-workspace header {
+  justify-content: space-between;
+}
+.review-workspace h1 {
+  font-size: 28px;
+}
+.review-workspace h2,
+.review-workspace h3 {
+  margin: 16px 0 10px;
+}
+.review-workspace p {
+  margin: 10px 0;
+  line-height: 1.6;
+}
+.review-workspace article,
+.review-editor,
+.review-login {
+  padding: 20px;
+  margin: 20px 0;
+  border: 1px solid var(--border-default, #d4d4d4);
+  border-radius: 12px;
+  background: var(--bg-surface, #fff);
+}
+.review-workspace label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+.review-workspace input,
+.review-workspace select,
+.review-workspace textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #999;
+  border-radius: 6px;
+  color: inherit;
+  background: var(--bg-surface, #fff);
+  font: inherit;
+}
+.review-workspace textarea {
+  min-height: 90px;
+}
+.review-workspace button:focus-visible,
+.review-workspace input:focus-visible,
+.review-workspace select:focus-visible,
+.review-workspace textarea:focus-visible {
+  outline: 3px solid #367e60;
+  outline-offset: 3px;
+}
+.review-workspace fieldset {
+  min-width: 0;
+  margin: 15px 0;
+  padding: 15px;
+  border: 1px solid #aaa;
+  border-radius: 8px;
+}
+.review-fields,
+.review-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+}
+.review-workspace .review-check {
+  flex-direction: row;
+  align-items: center;
+}
+.review-workspace .review-check input {
+  width: auto;
+}
+.review-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.review-list button {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+  text-align: left;
+  width: 100%;
+  padding: 14px;
+  color: inherit;
+  background: var(--bg-surface, #fff);
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.review-list small {
+  display: block;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.review-workspace pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 400px;
+  overflow: auto;
+  background: #f1f4f1;
+  color: #18241e;
+  padding: 12px;
+  border-radius: 6px;
+}
+.review-error {
+  border: 1px solid #b94040;
+  padding: 14px;
+  border-radius: 8px;
+  color: #8e2020;
+  background: #fff1f1;
+  overflow-wrap: anywhere;
+}
+.review-decision {
+  border: 1px solid #a77c22;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+.review-workspace li {
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+.review-login {
+  max-width: 420px;
+}
+@media (max-width: 600px) {
+  .review-workspace {
+    padding: 8px;
+  }
+  .review-workspace article,
+  .review-editor {
+    padding: 12px;
+  }
+  .review-filters > label {
+    width: 100%;
+  }
+}

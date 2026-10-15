@@ -20,7 +20,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
     ...init,
     credentials: "include",
-    headers: { "content-type": "application/json", ...init.headers },
+    headers: {
+      ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+      ...init.headers,
+    },
   });
   const payload = (await response.json()) as ApiResponse<T> & {
     error?: { message?: string };

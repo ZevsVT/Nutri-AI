@@ -20,6 +20,7 @@ async function connectOrSkip(
 ): Promise<PrismaClient | null> {
   const url = databaseUrl();
   if (!url) {
+    assert.ok(!process.env.CI, "CI must configure DATABASE_URL");
     context.skip("DATABASE_URL is not configured");
     return null;
   }
@@ -28,10 +29,9 @@ async function connectOrSkip(
   try {
     await client.$connect();
     await client.$queryRaw`SELECT 1`;
-  } catch {
+  } catch (error) {
     await client.$disconnect();
-    context.skip("PostgreSQL is not reachable; start the local database first");
-    return null;
+    throw error;
   }
 
   try {
@@ -42,16 +42,12 @@ async function connectOrSkip(
       WHERE table_schema = 'public' AND table_name = 'User'`;
     if (!tableCheck[0]?.tableName) {
       await client.$disconnect();
-      context.skip(
-        "PostgreSQL is reachable but Prisma migrations are not applied",
-      );
-      return null;
+      throw new Error("Configured PostgreSQL requires applied migrations");
     }
     return client;
-  } catch {
+  } catch (error) {
     await client.$disconnect();
-    context.skip("PostgreSQL is not reachable; start the local database first");
-    return null;
+    throw error;
   }
 }
 

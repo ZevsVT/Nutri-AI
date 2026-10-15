@@ -23,9 +23,12 @@ export class FoodRepository {
   }
 
   findByAlias(normalizedAlias: string, language = "vi") {
-    return this.prisma.foodAlias.findUnique({
+    return this.prisma.foodAlias.findFirst({
       where: {
-        normalizedAlias_language: { normalizedAlias, language },
+        normalizedAlias,
+        language,
+        isActive: true,
+        food: { isActive: true },
       },
       include: { food: true },
     });
@@ -58,6 +61,7 @@ export class FoodRepository {
           {
             aliases: {
               some: {
+                isActive: true,
                 normalizedAlias: {
                   contains: token,
                   mode: "insensitive" as const,
@@ -69,6 +73,7 @@ export class FoodRepository {
         {
           aliases: {
             some: {
+              isActive: true,
               OR: [
                 { alias: { contains: value, mode: "insensitive" as const } },
                 {
@@ -85,7 +90,7 @@ export class FoodRepository {
     };
     const candidates = await this.prisma.food.findMany({
       where,
-      include: { aliases: true },
+      include: { aliases: { where: { isActive: true } } },
       take: 2_000,
     });
     return rankFoods(candidates, normalized)

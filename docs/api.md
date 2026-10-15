@@ -1,5 +1,9 @@
 # Nutri-AI production API
 
+Food-data administration is documented in [food reviews](food-reviews.md), including
+the `/api/v1/admin/foods`, `/admin/food-reviews`, history and decision endpoints,
+session role policy, mutation header and conflict behavior.
+
 The backend exposes version `v1` at `/api/v1`. Private resources require the
 Issue #8 session cookie. In development contract tests, the authentication
 foundation also accepts `x-development-user-id`; this header is disabled in
