@@ -2,8 +2,22 @@
 
 Issue #17 adds a local, reviewed packaged-food catalog to the authenticated
 `POST /api/v1/barcode/scan` endpoint. No external credentials are required.
-The frontend `BarcodeScannerModal` still simulates scanning with a hardcoded
-product; camera decoding and frontend API integration remain separate work.
+The web scanner supports rear-camera decoding and manual entry. It sends only
+the decoded digits to the lookup API. Camera frames stay in the browser.
+Camera capture requires HTTPS or localhost and browser permission. Enter the
+barcode manually if the device or browser cannot open the camera.
+
+### Web scanner verification
+
+On the supported desktop and mobile browsers, sign in and open Barcode Scanner
+from the command palette. Compare a camera scan of a known EAN or UPC label with
+the same digits entered manually, including any leading zeros. For camera
+verification, also deny access and use manual entry, then close the scanner and
+check that the browser's camera indicator turns off. Test a valid unlisted code
+and a code with an invalid check digit. On a test catalog with sourced nutrition,
+enter a consumed quantity and confirm it. The diary should show that quantity
+and the same nutrition source/version. The bundled identity-only catalog can
+verify lookup but requires a separate sourced fixture to verify saving.
 
 ## Runtime and identity
 

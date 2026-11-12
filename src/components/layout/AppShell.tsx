@@ -257,11 +257,10 @@ export function AppShell() {
         <QuickLogModal onClose={() => setIsQuickLogOpen(false)} onSaveMeal={handleSavedMeal} onExpired={handleExpired} />
       )}
 
-      <BarcodeScannerModal
-        isOpen={isBarcodeOpen}
-        onClose={() => setIsBarcodeOpen(false)}
-        onLogScannedFood={openQuickLog}
-      />
+      {isBarcodeOpen && authUser && (
+        <BarcodeScannerModal onClose={() => setIsBarcodeOpen(false)} onSaveMeal={handleSavedMeal}
+          onExpired={handleExpired} onManual={() => { setIsBarcodeOpen(false); openQuickLog(); }} />
+      )}
 
       <MealDetailModal
         meal={selectedMealForModal}
