@@ -168,7 +168,8 @@ export function AppShell() {
           )}
 
           {activeView === "analyze" && (
-            <AnalyzeView onOpenManual={() => setIsQuickLogOpen(true)} />
+            <AnalyzeView onOpenManual={() => setIsQuickLogOpen(true)}
+              onMealSaved={(meal) => setToastMessage(`"${meal.name}" saved to your Food Diary`)} />
           )}
 
           {activeView === "diary" && (

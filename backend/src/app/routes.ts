@@ -27,6 +27,7 @@ import {
   createAnalysisSchema,
   createMealSchema,
   dailyNutritionSchema,
+  deleteMealSchema,
   foodSearchSchema,
   idParamsSchema,
   insightsSchema,
@@ -278,7 +279,13 @@ export async function registerRoutes(
   );
   app.delete(
     `${API_PREFIX}/meals/:id`,
-    { ...privateRoute, ...validate("params", idParamsSchema) },
+    {
+      ...privateRoute,
+      preValidation: [
+        validateRequest("params", idParamsSchema),
+        validateRequest("query", deleteMealSchema),
+      ],
+    },
     handler(apiController.deleteMeal),
   );
 
@@ -296,8 +303,10 @@ export async function registerRoutes(
     `${API_PREFIX}/meal-analysis/:id/confirm`,
     {
       ...privateRoute,
-      ...validate("params", idParamsSchema),
-      ...validate("body", confirmAnalysisSchema),
+      preValidation: [
+        validateRequest("params", idParamsSchema),
+        validateRequest("body", confirmAnalysisSchema),
+      ],
     },
     handler(apiController.confirmAnalysis),
   );
