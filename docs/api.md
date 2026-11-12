@@ -44,6 +44,7 @@ request ID and server logs for diagnosis.
 | `GET /meals` | Required | User diary with date/type/status filters |
 | `GET/PATCH/DELETE /meals/:id` | Required | Owned meal read, editable metadata, soft delete |
 | `POST /meal-analysis` | Required | Accept an image/input reference and create a pending job |
+| `POST /meal-analysis/transcribe` | Required | Transcribe a short Vietnamese WAV recording without creating a meal |
 | `GET /meal-analysis/:id` | Required | Poll `PENDING`, `PROCESSING`, `READY`, or `FAILED` |
 | `POST /meal-analysis/:id/confirm` | Required | Apply reviewed items and persist snapshots |
 | `GET /nutrition/daily?date=` | Required | Confirmed meal totals for a day |
@@ -69,6 +70,23 @@ meal type while the meal is unconfirmed. `DELETE` soft-deletes the entry
 and applies private image retention when an image is attached.
 
 ## Confirmation semantics
+
+### Vietnamese voice and text
+
+`POST /api/v1/meal-analysis/transcribe` takes one multipart `file` with
+MIME type `audio/wav`, mono 16-bit PCM, a sample rate from 8–48 kHz, and
+duration from 0.25 to 30 seconds. The response contains an editable
+`transcript` and uses `Cache-Control: no-store`. Silence and invalid
+recordings return a validation error. Long recordings return 413.
+
+Send the reviewed or typed description (up to 2,000 characters) as
+`inputReference` with `inputType: "TEXT"` and `reviewTranscript: true`
+to `POST /api/v1/meal-analysis`.
+This creates a new owned review draft and returns `READY` with extracted
+foods and any spoken quantities and units. Household units such as `tô`
+or `quả` are retained for review and need a compatible catalog reference
+or a user-supplied measured quantity. No transcript or recording is saved
+in the application database. Confirmation uses the same endpoint as a photo.
 
 ### Photo recognition
 

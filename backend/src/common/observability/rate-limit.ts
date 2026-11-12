@@ -21,6 +21,7 @@ export function rateLimitCategory(url: string): RateLimitCategory | "general" {
   if (path.startsWith("/api/v1/auth/")) return "authentication";
   if (
     path === "/api/v1/meal-analysis" ||
+    path === "/api/v1/meal-analysis/transcribe" ||
     path === "/api/v1/ai/chat" ||
     path === "/api/v1/barcode/scan"
   )

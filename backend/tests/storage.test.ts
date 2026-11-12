@@ -10,6 +10,8 @@ import { loadConfig, type AppConfig } from "../src/config/env.js";
 import { createObjectKey } from "../src/common/uploads/file-policy.js";
 import { S3StorageProvider } from "../src/integrations/storage/storage-provider.js";
 import { OpenAiMealVision } from "../src/integrations/ai/openai-vision.js";
+import { OpenAiMealVoice } from "../src/integrations/ai/openai-voice.js";
+import { validateMealAudio } from "../src/common/uploads/meal-audio.js";
 import { PrismaBusinessApiService } from "../src/modules/api/api.service.js";
 import { ImageAnalysisWorker } from "../src/modules/meals/image-analysis.worker.js";
 import { PrismaStorageObjectRepository } from "../src/modules/storage/storage.repository.js";
@@ -23,6 +25,70 @@ const image = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
 );
+
+function wave(seconds = 1, amplitude = 100) {
+  const rate = 8000;
+  const audio = Buffer.alloc(44 + rate * seconds * 2);
+  audio.write("RIFF", 0);
+  audio.writeUInt32LE(audio.length - 8, 4);
+  audio.write("WAVEfmt ", 8);
+  audio.writeUInt32LE(16, 16);
+  audio.writeUInt16LE(1, 20);
+  audio.writeUInt16LE(1, 22);
+  audio.writeUInt32LE(rate, 24);
+  audio.writeUInt32LE(rate * 2, 28);
+  audio.writeUInt16LE(2, 32);
+  audio.writeUInt16LE(16, 34);
+  audio.write("data", 36);
+  audio.writeUInt32LE(audio.length - 44, 40);
+  for (let offset = 44; offset < audio.length; offset += 2)
+    audio.writeInt16LE(offset % 4 ? amplitude : -amplitude, offset);
+  return audio;
+}
+
+test("Vietnamese voice requests validate audio and keep transcription and suggestion payloads separate", async () => {
+  const audio = wave();
+  assert.doesNotThrow(() => validateMealAudio(audio, "audio/wav"));
+  assert.throws(() => validateMealAudio(audio, "audio/webm"), /PCM WAV/);
+  assert.throws(() => validateMealAudio(wave(31), "audio/wav"), /30 seconds/);
+  assert.throws(() => validateMealAudio(wave(1, 0), "audio/wav"), /No speech/);
+  const text = "Một tô phở bò và hai quả trứng luộc";
+  const items = [
+    { label: "Phở bò", amount: 1, unit: "tô" },
+    { label: "Trứng luộc", amount: 2, unit: "quả" },
+  ];
+  const provider = new OpenAiMealVoice(
+    "test-model",
+    "test-key",
+    1000,
+    async (url, init) => {
+      if (String(url).endsWith("/audio/transcriptions")) {
+        assert.ok(init?.body instanceof FormData);
+        assert.equal(init.body.get("model"), "gpt-transcribe");
+        assert.equal(init.body.get("languages[]"), "vi");
+        const file = init.body.get("file");
+        assert.ok(file instanceof Blob);
+        assert.deepEqual(Buffer.from(await file.arrayBuffer()), audio);
+        return Response.json({ text });
+      }
+      const request = JSON.parse(String(init?.body));
+      assert.equal(request.store, false);
+      assert.equal(request.input, text);
+      return Response.json({
+        model: "test-version",
+        status: "completed",
+        output: [
+          {
+            type: "message",
+            content: [{ type: "output_text", text: JSON.stringify({ items }) }],
+          },
+        ],
+      });
+    },
+  );
+  assert.equal(await provider.transcribe(audio), text);
+  assert.deepEqual((await provider.suggest(text)).items, items);
+});
 
 function multipart(
   bytes: Uint8Array,
@@ -331,6 +397,29 @@ test(
         };
       },
     };
+    const transcript = "Một tô phở bò và hai quả trứng luộc";
+    const voice = {
+      provider: "voice-fixture",
+      model: "test-model",
+      async transcribe(audio: Uint8Array) {
+        assert.deepEqual(Buffer.from(audio), wave());
+        return transcript;
+      },
+      async suggest(text: string) {
+        assert.ok(text.startsWith(transcript));
+        return {
+          modelVersion: "voice-test-version",
+          items: [
+            { label, amount: 1, unit: "tô" },
+            {
+              label: `Trứng luộc ${owner}`,
+              amount: text === transcript ? 2 : 3,
+              unit: "quả",
+            },
+          ],
+        };
+      },
+    };
     const app = await buildApp({
       config: appConfig,
       storageService: storage,
@@ -339,6 +428,7 @@ test(
         undefined,
         storage,
         vision,
+        voice,
       ),
     });
     const worker = new ImageAnalysisWorker(prisma, storage, vision, app.log);
@@ -652,6 +742,88 @@ test(
       assert.equal(retained.status, "RETAINED");
       assert.ok(retained.expiresAt);
       assert.equal((await daily()).totals.calories, 0);
+
+      const audio = multipart(wave(), "recording.wav", "audio/wav");
+      const audioPath = "/api/v1/meal-analysis/transcribe";
+      const transcribe = (headers: Record<string, string>) =>
+        app.inject({
+          method: "POST",
+          url: audioPath,
+          headers: { ...headers, "content-type": audio.contentType },
+          payload: audio.payload,
+        });
+      assert.equal((await transcribe({})).statusCode, 401);
+      const transcribed = await transcribe(user(owner));
+      assert.equal(transcribed.statusCode, 200);
+      assert.equal(transcribed.headers["cache-control"], "no-store");
+      assert.equal(transcribed.json().data.transcript, transcript);
+      const textDraft = (inputReference: string) =>
+        app.inject({
+          method: "POST",
+          url: "/api/v1/meal-analysis",
+          headers: user(owner),
+          payload: {
+            inputType: "TEXT",
+            inputReference,
+            reviewTranscript: true,
+          },
+        });
+      const voiceResponse = await textDraft(transcript);
+      assert.equal(voiceResponse.statusCode, 202);
+      assert.doesNotMatch(voiceResponse.body, new RegExp(transcript));
+      const voiceDraft = voiceResponse.json().data;
+      assert.equal(voiceDraft.status, "READY");
+      assert.equal(voiceDraft.inputReference, null);
+      assert.equal(
+        voiceDraft.predictions.find(
+          (item: { unit: string }) => item.unit === "quả",
+        ).quantity,
+        2,
+      );
+      assert.equal(
+        await prisma.mealItem.count({ where: { mealId: voiceDraft.mealId } }),
+        0,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: "DELETE",
+            url: `/api/v1/meals/${voiceDraft.mealId}?draftOnly=true`,
+            headers: user(owner),
+          })
+        ).statusCode,
+        204,
+      );
+      const edited = (await textDraft(`${transcript}, sửa lại ba quả`)).json()
+        .data;
+      assert.equal(
+        edited.predictions.find((item: { unit: string }) => item.unit === "quả")
+          .quantity,
+        3,
+      );
+      const spoken = edited.predictions.find(
+        (item: { unit: string }) => item.unit === "tô",
+      );
+      const loggedVoice = await app.inject({
+        method: "POST",
+        url: `/api/v1/meal-analysis/${edited.analysisId}/confirm`,
+        headers: user(owner),
+        payload: {
+          items: [
+            {
+              foodId: food.id,
+              predictionId: spoken.id,
+              quantity: 150,
+              unit: "g",
+            },
+          ],
+        },
+      });
+      assert.equal(loggedVoice.statusCode, 200);
+      assert.equal(
+        loggedVoice.json().data.items[0].provenance.version,
+        "test-v1",
+      );
     } finally {
       await app.close();
       await prisma.user.deleteMany({ where: { id: { in: [owner, other] } } });

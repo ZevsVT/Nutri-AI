@@ -73,8 +73,13 @@ export const createAnalysisSchema = z
     mealId: id.optional(),
     inputType: z.enum(["IMAGE", "TEXT", "BARCODE", "MANUAL"]).default("IMAGE"),
     inputReference: z.string().trim().min(1).max(2_000),
+    reviewTranscript: z.literal(true).optional(),
   })
-  .strict();
+  .strict()
+  .refine((input) => !input.reviewTranscript || input.inputType === "TEXT", {
+    message: "Transcript review requires TEXT input",
+    path: ["inputType"],
+  });
 export const confirmAnalysisSchema = z
   .object({
     items: z

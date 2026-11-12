@@ -1,5 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { AppError } from "../../common/errors/app-error.js";
 import { successResponse } from "../../common/errors/error-handler.js";
+import {
+  maxMealAudioBytes,
+  validateMealAudio,
+} from "../../common/uploads/meal-audio.js";
 import type { BusinessApiService } from "./api.service.js";
 import type {
   CreateAnalysisBody,
@@ -133,6 +138,36 @@ export class ApiController {
         await this.service.getAnalysis(request.user!.id, request.params.id),
       ),
     );
+  transcribeMeal = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.isMultipart())
+      throw new AppError(
+        "VALIDATION_ERROR",
+        "A multipart WAV recording is required",
+      );
+    let audio: Buffer | undefined;
+    for await (const part of request.parts({
+      limits: {
+        files: 1,
+        fields: 0,
+        parts: 2,
+        fileSize: maxMealAudioBytes + 1,
+      },
+    })) {
+      if (part.type !== "file" || part.fieldname !== "file")
+        throw new AppError(
+          "VALIDATION_ERROR",
+          "Send a WAV recording in the file field",
+        );
+      audio = await part.toBuffer();
+      validateMealAudio(audio, part.mimetype);
+    }
+    if (!audio)
+      throw new AppError("VALIDATION_ERROR", "A WAV recording is required");
+    const transcript = await this.service.transcribeMeal(audio);
+    return reply
+      .header("Cache-Control", "no-store")
+      .send(successResponse({ transcript }));
+  };
   confirmAnalysis = async (
     request: Request<ConfirmAnalysisBody, unknown, Params>,
     reply: FastifyReply,
