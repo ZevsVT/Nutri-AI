@@ -1,7 +1,10 @@
 import workletUrl from "./voice-capture.worklet.js?url&no-inline";
 
-export function mealAudioWav(samples: Int16Array, sampleRate: number) {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
+export function mealAudioWav(samples: Int16Array, sourceRate: number) {
+  const sampleRate = Math.min(sourceRate, 48_000);
+  const step = sourceRate / sampleRate;
+  const count = Math.floor(samples.length / step);
+  const buffer = new ArrayBuffer(44 + count * 2);
   const view = new DataView(buffer);
   const text = (offset: number, value: string) => {
     for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
@@ -18,7 +21,13 @@ export function mealAudioWav(samples: Int16Array, sampleRate: number) {
   view.setUint16(34, 16, true);
   text(36, "data");
   view.setUint32(40, buffer.byteLength - 44, true);
-  samples.forEach((sample, index) => view.setInt16(44 + index * 2, sample, true));
+  for (let index = 0; index < count; index++) {
+    const start = Math.floor(index * step);
+    const end = Math.floor((index + 1) * step);
+    let sum = 0;
+    for (let frame = start; frame < end; frame++) sum += samples[frame];
+    view.setInt16(44 + index * 2, Math.round(sum / (end - start)), true);
+  }
   return new Blob([buffer], { type: "audio/wav" });
 }
 
@@ -40,7 +49,7 @@ export async function captureMealVoice(signal: AbortSignal, onRecording: (audio:
   signal.addEventListener("abort", release, { once: true });
   try {
     signal.throwIfAborted();
-    if (context.sampleRate < 8000 || context.sampleRate > 48_000)
+    if (context.sampleRate < 8000)
       throw new Error("This audio sample rate is unsupported. Type the meal description instead.");
     await Promise.all([context.resume(), context.audioWorklet.addModule(workletUrl)]);
     signal.throwIfAborted();

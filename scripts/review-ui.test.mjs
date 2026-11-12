@@ -15,6 +15,10 @@ test("voice audio and edited Vietnamese text go to separate endpoints", async ()
     assert.equal(bytes.toString("ascii", 0, 4), "RIFF");
     assert.equal(bytes.readUInt32LE(24), 16000);
     assert.equal(bytes.readUInt32LE(40), 4);
+    const downsampled = Buffer.from(await mealAudioWav(Int16Array.from([100, 200, 300, 400]), 96000).arrayBuffer());
+    assert.equal(downsampled.readUInt32LE(24), 48000);
+    assert.equal(downsampled.readUInt32LE(40), 4);
+    assert.equal(downsampled.readInt16LE(44), 150);
     const before = "Một tô phở bò và hai quả trứng luộc";
     const after = "Một tô phở bò và ba quả trứng luộc";
     const signal = new AbortController().signal;
