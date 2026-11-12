@@ -6,7 +6,9 @@ import {
 } from "../../integrations/ai/openai-vision.js";
 import { activeFoodWhere } from "../foods/food.repository.js";
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
+import { latestNutrition } from "../nutrition/nutrition-record.js";
 import type { StorageService } from "../storage/storage.service.js";
+import { estimatePortion } from "./portion-estimation.js";
 
 const unavailableMessage =
   "Could not analyze this photo. Try again or enter the meal manually.";
@@ -76,11 +78,20 @@ export class ImageAnalysisWorker {
       const result = visionResultSchema.parse(await this.vision.analyze(image));
       const predictions: Prisma.AIFoodPredictionCreateManyInput[] = [];
       for (const item of result.items) {
+        const foodId = await this.matchFood(item.label);
+        const reference =
+          item.portion && foodId
+            ? await this.portionReference(foodId)
+            : undefined;
+        const portion = estimatePortion(item.portion, reference);
         predictions.push({
           analysisId: job.id,
           predictedName: item.label,
           confidence: item.confidence,
-          foodId: await this.matchFood(item.label),
+          foodId,
+          estimatedQuantity: portion?.quantity,
+          estimatedUnit: portion?.unit,
+          modelMetadata: portion ? { portion: portion.evidence } : undefined,
         });
       }
       await this.prisma.$transaction(async (tx) => {
@@ -128,6 +139,26 @@ export class ImageAnalysisWorker {
       take: 2,
     });
     return matches.length === 1 ? (matches[0]?.id ?? null) : null;
+  }
+
+  private async portionReference(foodId: string) {
+    const food = await this.prisma.food.findFirst({
+      where: { id: foodId, AND: activeFoodWhere },
+      include: {
+        packagedProduct: true,
+        nutritionRecords: {
+          include: { nutritionVersion: { include: { source: true } } },
+        },
+      },
+    });
+    return (
+      (food &&
+        latestNutrition(
+          food.nutritionRecords,
+          food.packagedProduct?.currentNutritionVersionId,
+        )) ||
+      undefined
+    );
   }
 
   private async fail(analysisId: string, mealId: string) {

@@ -103,6 +103,15 @@ export function AnalyzeView({ onOpenManual }: { onOpenManual: () => void }) {
                   {item.predictedName}
                   {!item.foodId && " · needs a food match"}
                   {item.confidence !== null && ` · ${Math.round(item.confidence * 100)}% model confidence`}
+                  {item.portionEstimate && item.quantity !== null && item.unit ? (
+                    <small>
+                      {" · "}Estimated {item.quantity} {item.unit} ({Math.round(item.portionEstimate.confidence * 100)}% portion confidence)
+                      {item.portionEstimate.servingReference
+                        ? ` · One serving is ${item.portionEstimate.servingReference.amount} ${item.portionEstimate.servingReference.unit}`
+                        : " · Visible measurement"}
+                      {` · ${item.portionEstimate.source} (${item.portionEstimate.version})`}
+                    </small>
+                  ) : " · Portion unknown"}
                 </li>
               ))}
             </ul>

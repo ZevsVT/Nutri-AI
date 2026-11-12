@@ -7,6 +7,13 @@ export interface AnalysisPrediction {
   quantity: number | null;
   unit: string | null;
   confidence: number | null;
+  portionEstimate?: {
+    basis: "VISIBLE_MEASUREMENT" | "VISIBLE_SERVING_COUNT";
+    confidence: number;
+    source: string;
+    version: string;
+    servingReference?: { amount: number; unit: string };
+  } | null;
 }
 
 export interface MealAnalysis {

@@ -316,7 +316,16 @@ test(
             resultMode === "empty"
               ? []
               : [
-                  { label, confidence: 0.9 },
+                  {
+                    label,
+                    confidence: 0.9,
+                    portion: {
+                      amount: 0.2,
+                      unit: "kg",
+                      basis: "VISIBLE_MEASUREMENT",
+                      confidence: 0.8,
+                    } as const,
+                  },
                   { label: `Rau thơm ${owner}`, confidence: null },
                 ],
         };
@@ -342,6 +351,31 @@ test(
           canonicalName: label,
           nameVi: label,
           normalizedName: normalizeFoodText(label),
+        },
+      });
+      const source = await prisma.foodSource.create({
+        data: {
+          id: owner,
+          provider: owner,
+          name: "Portion fixture",
+          sourceType: "CURATED",
+        },
+      });
+      const version = await prisma.nutritionVersion.create({
+        data: {
+          sourceId: source.id,
+          version: "test-v1",
+          effectiveFrom: new Date(0),
+        },
+      });
+      await prisma.foodNutrition.create({
+        data: {
+          foodId: food.id,
+          nutritionVersionId: version.id,
+          servingAmount: 100,
+          servingUnit: "g",
+          referenceBasis: "PER_100_G",
+          calories: 150,
         },
       });
       const upload = () =>
@@ -380,12 +414,14 @@ test(
       const ready = (await get(owner, job.analysisId)).json().data;
       assert.equal(ready.status, "READY");
       assert.equal(ready.modelVersion, "test-version");
-      assert.equal(
-        ready.predictions.find(
-          (item: { predictedName: string }) => item.predictedName === label,
-        ).foodId,
-        food.id,
+      const recognized = ready.predictions.find(
+        (item: { predictedName: string }) => item.predictedName === label,
       );
+      assert.equal(recognized.foodId, food.id);
+      assert.equal(recognized.quantity, 200);
+      assert.equal(recognized.unit, "g");
+      assert.equal(recognized.portionEstimate.confidence, 0.8);
+      assert.equal(recognized.portionEstimate.version, "test-v1");
       assert.equal(
         ready.predictions.find(
           (item: { predictedName: string }) => item.predictedName !== label,
@@ -402,6 +438,20 @@ test(
           .status,
         "REVIEW",
       );
+      const confirmed = await app.inject({
+        method: "POST",
+        url: `/api/v1/meal-analysis/${job.analysisId}/confirm`,
+        headers: user(owner),
+        payload: { items: [{ foodId: food.id, quantity: 150, unit: "g" }] },
+      });
+      assert.equal(confirmed.statusCode, 200);
+      assert.equal(confirmed.json().data.totals.calories, 225);
+      assert.equal(confirmed.json().data.totals.protein, null);
+      const snapshot = await prisma.mealItemNutrition.findFirstOrThrow({
+        where: { mealItem: { mealId: job.mealId } },
+      });
+      assert.equal(snapshot.nutritionVersionId, version.id);
+      assert.equal(snapshot.sourceId, source.id);
 
       resultMode = "empty";
       const empty = (await create(owner, (await upload()).reference)).json()
@@ -422,6 +472,11 @@ test(
     } finally {
       await app.close();
       await prisma.user.deleteMany({ where: { id: { in: [owner, other] } } });
+      await prisma.foodNutrition.deleteMany({
+        where: { nutritionVersion: { sourceId: owner } },
+      });
+      await prisma.nutritionVersion.deleteMany({ where: { sourceId: owner } });
+      await prisma.foodSource.deleteMany({ where: { id: owner } });
       await prisma.food.deleteMany({ where: { canonicalName: label } });
       await prisma.$disconnect();
       await rm(root, { recursive: true, force: true });
