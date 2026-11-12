@@ -4,6 +4,40 @@ import { createServer } from "vite";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+test("voice audio and edited Vietnamese text go to separate endpoints", async () => {
+  const vite = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const originalFetch = globalThis.fetch;
+  try {
+    const { mealAudioWav } = await vite.ssrLoadModule("/src/services/voiceCapture.ts");
+    const client = await vite.ssrLoadModule("/src/services/mealAnalysisService.ts");
+    const audio = mealAudioWav(Int16Array.from([100, -100]), 16000);
+    const bytes = Buffer.from(await audio.arrayBuffer());
+    assert.equal(bytes.toString("ascii", 0, 4), "RIFF");
+    assert.equal(bytes.readUInt32LE(24), 16000);
+    assert.equal(bytes.readUInt32LE(40), 4);
+    const before = "Một tô phở bò và hai quả trứng luộc";
+    const after = "Một tô phở bò và ba quả trứng luộc";
+    const signal = new AbortController().signal;
+    globalThis.fetch = async (url, init) => {
+      assert.equal(init.credentials, "include");
+      if (url.endsWith("/meal-analysis/transcribe")) {
+        assert.ok(init.body instanceof FormData);
+        assert.equal(init.headers.has("content-type"), false);
+        assert.equal(init.body.get("file").name, "meal.wav");
+        return Response.json({ success: true, data: { transcript: before } });
+      }
+      assert.ok(url.endsWith("/meal-analysis"));
+      assert.deepEqual(JSON.parse(init.body), { inputType: "TEXT", inputReference: after });
+      return Response.json({ success: true, data: { status: "READY", analysisId: "voice-draft" } });
+    };
+    assert.equal(await client.transcribeMealAudio(audio, signal), before);
+    assert.equal((await client.startTextAnalysis(after, signal)).analysisId, "voice-draft");
+  } finally {
+    globalThis.fetch = originalFetch;
+    await vite.close();
+  }
+});
+
 test("barcode lookup preserves digits and writes only a reviewed, sourced product", async () => {
   const vite = await createServer({ server: { middlewareMode: true }, appType: "custom" });
   const originalFetch = globalThis.fetch;

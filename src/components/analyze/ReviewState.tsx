@@ -18,11 +18,13 @@ export function ReviewState({
   onConfirm,
   onCancel,
   manual = false,
+  onEditTranscript,
 }: {
   predictions: AnalysisPrediction[];
   onConfirm: (items: Array<MealEntryInput & { predictionId?: string }>) => Promise<void>;
   onCancel: () => void;
   manual?: boolean;
+  onEditTranscript?: () => void;
 }) {
   const [rows, setRows] = useState<ReviewRow[]>(() => predictions.map((item) => ({
     key: item.id,
@@ -96,7 +98,9 @@ export function ReviewState({
                   ` · ${Math.round(row.prediction.confidence * 100)}% recognition confidence`}
                 {row.prediction.portionEstimate
                   ? ` · ${Math.round(row.prediction.portionEstimate.confidence * 100)}% portion confidence · ${row.prediction.portionEstimate.source} (${row.prediction.portionEstimate.version})`
-                  : " · Portion unknown"}
+                  : row.prediction.quantity !== null
+                    ? ` · From your description: ${row.prediction.quantity} ${row.prediction.unit ?? ""}`
+                    : " · Portion unknown"}
                 {row.prediction.portionEstimate?.servingReference &&
                   ` · One serving is ${row.prediction.portionEstimate.servingReference.amount} ${row.prediction.portionEstimate.servingReference.unit}`}
               </p>
@@ -130,6 +134,7 @@ export function ReviewState({
       </fieldset>
       {error && <p role="alert">{error}</p>}
       <Button variant="primary" loading={saving} onClick={() => void save()}>Confirm meal</Button>
+      {onEditTranscript && <Button disabled={saving} onClick={onEditTranscript}>Edit Vietnamese transcript</Button>}
       <Button disabled={saving} onClick={onCancel}>{manual ? "Cancel" : "Discard and start again"}</Button>
     </section>
   );

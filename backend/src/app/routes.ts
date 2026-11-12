@@ -296,6 +296,11 @@ export async function registerRoutes(
     { ...privateRoute, ...validate("body", createAnalysisSchema) },
     handler(apiController.createAnalysis),
   );
+  app.post(
+    `${API_PREFIX}/meal-analysis/transcribe`,
+    privateRoute,
+    handler(apiController.transcribeMeal),
+  );
   app.get(
     `${API_PREFIX}/meal-analysis/:id`,
     { ...privateRoute, ...validate("params", idParamsSchema) },

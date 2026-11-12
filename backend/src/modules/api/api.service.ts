@@ -23,8 +23,12 @@ import {
 } from "../nutrition/nutrition-record.js";
 import type { StorageService } from "../storage/storage.service.js";
 import type { MealVisionProvider } from "../../integrations/ai/openai-vision.js";
+import {
+  voiceMealSchema,
+  type MealVoiceProvider,
+} from "../../integrations/ai/openai-voice.js";
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
-import { activeFoodWhere } from "../foods/food.repository.js";
+import { activeFoodWhere, FoodRepository } from "../foods/food.repository.js";
 import { portionEvidenceSchema } from "../meals/portion-estimation.js";
 import {
   rankFoods,
@@ -161,6 +165,7 @@ export interface BusinessApiService {
     input: { mealId?: string; inputType: string; inputReference: string },
   ): Promise<AnalysisDto>;
   getAnalysis(userId: string, id: string): Promise<AnalysisDto>;
+  transcribeMeal(audio: Uint8Array): Promise<string>;
   confirmAnalysis(
     userId: string,
     id: string,
@@ -298,6 +303,12 @@ type PredictionLike = {
 
 /** Deterministic service used when the app is booted without DATABASE_URL and in API contract tests. */
 export class InMemoryBusinessApiService implements BusinessApiService {
+  async transcribeMeal(): Promise<string> {
+    throw new AppError(
+      "AI_ANALYSIS_ERROR",
+      "Voice transcription is unavailable. Enter the meal manually.",
+    );
+  }
   constructor(
     private readonly barcodeProvider: BarcodeProvider = new InMemoryBarcodeProvider(
       memoryCatalogProducts(),
@@ -485,6 +496,11 @@ export class InMemoryBusinessApiService implements BusinessApiService {
     userId: string,
     input: { mealId?: string; inputType: string; inputReference: string },
   ) {
+    if (input.inputType === "TEXT")
+      throw new AppError(
+        "AI_ANALYSIS_ERROR",
+        "Text analysis is unavailable. Enter the meal manually.",
+      );
     if (input.inputType === "IMAGE") {
       if (!this.storageService)
         throw new AppError("STORAGE_ERROR", "Storage is not configured");
@@ -719,6 +735,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
     ),
     private readonly storageService?: StorageService,
     private readonly vision?: Pick<MealVisionProvider, "provider" | "model">,
+    private readonly voice?: MealVoiceProvider,
   ) {}
 
   async searchFoods({
@@ -1046,6 +1063,8 @@ export class PrismaBusinessApiService implements BusinessApiService {
   ) {
     if (input.inputType === "IMAGE")
       return this.createImageAnalysis(userId, input);
+    if (input.inputType === "TEXT")
+      return this.createTextAnalysis(userId, input);
     let mealId = input.mealId;
     if (mealId) {
       const meal = await this.prisma.meal.findFirst({
@@ -1076,6 +1095,82 @@ export class PrismaBusinessApiService implements BusinessApiService {
       },
     });
     return this.analysisDto(analysis, []);
+  }
+
+  async transcribeMeal(audio: Uint8Array) {
+    if (!this.voice)
+      throw new AppError(
+        "AI_ANALYSIS_ERROR",
+        "Voice transcription is unavailable. Enter the meal manually.",
+      );
+    const transcript = (await this.voice.transcribe(audio)).trim();
+    if (!transcript)
+      throw new AppError(
+        "VALIDATION_ERROR",
+        "No speech was transcribed. Record again or type the meal description.",
+      );
+    return transcript;
+  }
+
+  private async createTextAnalysis(
+    userId: string,
+    input: { mealId?: string; inputReference: string },
+  ) {
+    if (input.mealId)
+      throw new AppError(
+        "INVALID_STATE",
+        "A meal description starts a new review draft",
+      );
+    const voice = this.voice;
+    if (!voice)
+      throw new AppError(
+        "AI_ANALYSIS_ERROR",
+        "Text analysis is unavailable. Enter the meal manually.",
+      );
+    const startedAt = new Date();
+    const result = voiceMealSchema.parse(
+      await voice.suggest(input.inputReference),
+    );
+    const foods = new FoodRepository(this.prisma);
+    const predictions: Prisma.AIFoodPredictionCreateWithoutAnalysisInput[] = [];
+    for (const item of result.items) {
+      const foodId = await foods.matchCanonicalFood(item.label);
+      predictions.push({
+        predictedName: item.label,
+        estimatedQuantity:
+          item.amount === null ? null : Math.round(item.amount * 1000) / 1000,
+        estimatedUnit: item.unit,
+        ...(foodId ? { food: { connect: { id: foodId } } } : {}),
+      });
+    }
+    const draft = await this.prisma.$transaction(async (tx) => {
+      const meal = await tx.meal.create({
+        data: {
+          userId,
+          capturedAt: startedAt,
+          mealType: "OTHER",
+          status: "REVIEW",
+        },
+      });
+      return tx.aIAnalysis.create({
+        data: {
+          userId,
+          mealId: meal.id,
+          inputType: "TEXT",
+          provider: voice.provider,
+          model: voice.model,
+          modelVersion: result.modelVersion,
+          status: "COMPLETED",
+          startedAt,
+          completedAt: new Date(),
+          predictions: { create: predictions },
+        },
+        include: {
+          predictions: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+        },
+      });
+    });
+    return this.analysisDto(draft, draft.predictions);
   }
 
   private async createImageAnalysis(

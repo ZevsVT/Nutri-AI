@@ -155,6 +155,20 @@ suggestions after processing. Check an unreadable or non-food photo for
 the no-result or retry path. Sign in with a second test account and
 verify the first account's storage reference and job ID are inaccessible.
 
+The same OpenAI configuration enables Vietnamese voice logging. The
+server sends a short WAV recording to `gpt-transcribe` when the user
+selects **Transcribe recording**, then sends the edited text to the
+configured vision model's text input for food extraction. The application
+does not write the recording or full transcript to storage or logs. It
+stores only the reviewable predictions and confirmed meal data. OpenAI
+retention follows the project data controls linked above.
+
+For a browser check on HTTPS or localhost, record “một tô phở bò và hai
+quả trứng luộc,” transcribe it, edit the amount, and generate suggestions.
+Check the draft in Analyze before confirming. Deny microphone access in
+a separate attempt and verify typing is available. Cancel an active
+recording and confirm the browser stops using the microphone.
+
 ## Architecture
 
 ```text

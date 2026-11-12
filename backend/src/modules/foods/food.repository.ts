@@ -15,6 +15,27 @@ export const activeFoodWhere = {
 export class FoodRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
+  async matchCanonicalFood(label: string) {
+    const normalized = normalizeFoodText(label);
+    if (!normalized) return null;
+    const matches = await this.prisma.food.findMany({
+      where: {
+        AND: activeFoodWhere,
+        OR: [
+          { normalizedName: normalized },
+          { nameVi: { equals: label, mode: "insensitive" } },
+          { nameEn: { equals: label, mode: "insensitive" } },
+          {
+            aliases: { some: { normalizedAlias: normalized, isActive: true } },
+          },
+        ],
+      },
+      select: { id: true },
+      take: 2,
+    });
+    return matches.length === 1 ? (matches[0]?.id ?? null) : null;
+  }
+
   findById(id: string) {
     return this.prisma.food.findUnique({
       where: { id },

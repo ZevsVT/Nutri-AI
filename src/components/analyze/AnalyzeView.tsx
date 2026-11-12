@@ -4,6 +4,7 @@ import { CapturePanel } from "./CapturePanel";
 import { ProcessingState } from "./ProcessingState";
 import { ReviewState } from "./ReviewState";
 import { ResultState } from "./ResultState";
+import { VoiceMealInput } from "./VoiceMealInput";
 import {
   confirmMealAnalysis,
   discardMealAnalysis,
@@ -25,6 +26,8 @@ export function AnalyzeView({
   const [busy, setBusy] = useState(false);
   const [analysis, setAnalysis] = useState<MealAnalysis | null>(null);
   const [saved, setSaved] = useState<SavedMeal | null>(null);
+  const [captureType, setCaptureType] = useState<"photo" | "voice">("photo");
+  const [transcript, setTranscript] = useState("");
   const [error, setError] = useState("");
   const active = useRef<AbortController | null>(null);
   const draftId = useRef<string | null>(null);
@@ -95,6 +98,7 @@ export function AnalyzeView({
     if (!analysis) return;
     const meal = await confirmMealAnalysis(analysis.analysisId, items);
     draftId.current = null;
+    setTranscript("");
     setSaved(meal);
     onMealSaved(meal);
   }
@@ -118,19 +122,28 @@ export function AnalyzeView({
         <ResultState meal={saved} onReset={reset} />
       ) : analysis ? (
         <ReviewState key={analysis.analysisId} predictions={analysis.predictions}
-          onConfirm={confirm} onCancel={reset} />
+          onConfirm={confirm} onCancel={() => { setTranscript(""); reset(); }}
+          onEditTranscript={analysis.inputType === "TEXT" ? reset : undefined} />
       ) : (
         <>
+          <div className="dropzone-actions">
+            <Button aria-pressed={captureType === "photo"} onClick={() => { reset(); setTranscript(""); setCaptureType("photo"); }}>Photo</Button>
+            <Button aria-pressed={captureType === "voice"} onClick={() => { reset(); setCaptureType("voice"); }}>Vietnamese voice</Button>
+          </div>
           {error && (
             <div className="card">
               <p role="alert">{error}</p>
               {file && <Button onClick={() => void analyze(file)}>Retry this photo</Button>}
             </div>
           )}
-          <CapturePanel
+          {captureType === "voice" ? (
+            <VoiceMealInput transcript={transcript} onTranscript={setTranscript}
+              onManual={() => { setTranscript(""); reset(); onOpenManual(); }}
+              onReview={(draft) => { draftId.current = draft.mealId; setAnalysis(draft); }} />
+          ) : <CapturePanel
             onPhoto={(photo) => void analyze(photo)}
             onOpenManual={() => { reset(); onOpenManual(); }}
-          />
+          />}
         </>
       )}
     </div>

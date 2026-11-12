@@ -21,6 +21,7 @@ export interface MealAnalysis {
   analysisId: string;
   mealId: string;
   status: "PENDING" | "PROCESSING" | "READY" | "FAILED";
+  inputType: string;
   predictions: AnalysisPrediction[];
   error?: { code: string; message: string };
 }
@@ -42,6 +43,24 @@ export async function startImageAnalysis(file: File, signal: AbortSignal) {
     void apiRequest(`/storage/objects/${upload.objectId}`, { method: "DELETE" }).catch(() => {});
     throw error;
   }
+}
+
+export async function transcribeMealAudio(audio: Blob, signal: AbortSignal) {
+  const body = new FormData();
+  body.set("file", audio, "meal.wav");
+  const { data } = await apiRequest<{ transcript: string }>("/meal-analysis/transcribe", {
+    method: "POST", body, signal,
+  });
+  return data.transcript;
+}
+
+export async function startTextAnalysis(transcript: string, signal: AbortSignal) {
+  const { data } = await apiRequest<MealAnalysis>("/meal-analysis", {
+    method: "POST", body: JSON.stringify({ inputType: "TEXT", inputReference: transcript }),
+    signal,
+  });
+  if (data.status !== "READY") throw new Error("Text analysis is unavailable. Enter the meal manually.");
+  return data;
 }
 
 export async function pollMealAnalysis(

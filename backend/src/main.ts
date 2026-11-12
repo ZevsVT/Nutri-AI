@@ -6,6 +6,7 @@ import { installSignalHandlers } from "./app/shutdown.js";
 import { loadConfig } from "./config/env.js";
 import { createPrismaDatabase } from "./integrations/database/prisma-database.js";
 import { OpenAiMealVision } from "./integrations/ai/openai-vision.js";
+import { OpenAiMealVoice } from "./integrations/ai/openai-voice.js";
 import { ImageAnalysisWorker } from "./modules/meals/image-analysis.worker.js";
 import { PrismaAuthRepository } from "./modules/auth/auth.repository.js";
 import { PrismaBarcodeProvider } from "./modules/foods/barcode.service.js";
@@ -25,6 +26,14 @@ dotenv.config({ path: resolve(process.cwd(), ".env") });
 
 const config = loadConfig();
 const database = createPrismaDatabase(config.databaseUrl);
+const voice =
+  config.aiProvider === "openai" && config.aiApiKey
+    ? new OpenAiMealVoice(
+        config.aiVisionModel,
+        config.aiApiKey,
+        config.externalRequestTimeoutMs,
+      )
+    : undefined;
 const vision =
   config.aiProvider === "openai" && config.aiApiKey
     ? new OpenAiMealVision(
@@ -60,6 +69,7 @@ try {
           new PrismaBarcodeProvider(database.client),
           storageService,
           vision,
+          voice,
         )
       : undefined,
     storageService,
