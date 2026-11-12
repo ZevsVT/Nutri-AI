@@ -27,7 +27,7 @@ test("voice audio and edited Vietnamese text go to separate endpoints", async ()
         return Response.json({ success: true, data: { transcript: before } });
       }
       assert.ok(url.endsWith("/meal-analysis"));
-      assert.deepEqual(JSON.parse(init.body), { inputType: "TEXT", inputReference: after });
+      assert.deepEqual(JSON.parse(init.body), { inputType: "TEXT", inputReference: after, reviewTranscript: true });
       return Response.json({ success: true, data: { status: "READY", analysisId: "voice-draft" } });
     };
     assert.equal(await client.transcribeMealAudio(audio, signal), before);

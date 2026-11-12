@@ -162,7 +162,12 @@ export interface BusinessApiService {
   deleteMeal(userId: string, id: string, draftOnly?: boolean): Promise<void>;
   createAnalysis(
     userId: string,
-    input: { mealId?: string; inputType: string; inputReference: string },
+    input: {
+      mealId?: string;
+      inputType: string;
+      inputReference: string;
+      reviewTranscript?: true;
+    },
   ): Promise<AnalysisDto>;
   getAnalysis(userId: string, id: string): Promise<AnalysisDto>;
   transcribeMeal(audio: Uint8Array): Promise<string>;
@@ -494,9 +499,14 @@ export class InMemoryBusinessApiService implements BusinessApiService {
 
   async createAnalysis(
     userId: string,
-    input: { mealId?: string; inputType: string; inputReference: string },
+    input: {
+      mealId?: string;
+      inputType: string;
+      inputReference: string;
+      reviewTranscript?: true;
+    },
   ) {
-    if (input.inputType === "TEXT")
+    if (input.reviewTranscript)
       throw new AppError(
         "AI_ANALYSIS_ERROR",
         "Text analysis is unavailable. Enter the meal manually.",
@@ -1059,12 +1069,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
 
   async createAnalysis(
     userId: string,
-    input: { mealId?: string; inputType: string; inputReference: string },
+    input: {
+      mealId?: string;
+      inputType: string;
+      inputReference: string;
+      reviewTranscript?: true;
+    },
   ) {
     if (input.inputType === "IMAGE")
       return this.createImageAnalysis(userId, input);
-    if (input.inputType === "TEXT")
-      return this.createTextAnalysis(userId, input);
+    if (input.reviewTranscript) return this.createTextAnalysis(userId, input);
     let mealId = input.mealId;
     if (mealId) {
       const meal = await this.prisma.meal.findFirst({

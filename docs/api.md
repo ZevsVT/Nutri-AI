@@ -80,7 +80,8 @@ duration from 0.25 to 30 seconds. The response contains an editable
 recordings return a validation error. Long recordings return 413.
 
 Send the reviewed or typed description (up to 2,000 characters) as
-`inputReference` with `inputType: "TEXT"` to `POST /api/v1/meal-analysis`.
+`inputReference` with `inputType: "TEXT"` and `reviewTranscript: true`
+to `POST /api/v1/meal-analysis`.
 This creates a new owned review draft and returns `READY` with extracted
 foods and any spoken quantities and units. Household units such as `tô`
 or `quả` are retained for review and need a compatible catalog reference

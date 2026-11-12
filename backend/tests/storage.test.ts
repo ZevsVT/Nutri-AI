@@ -762,7 +762,11 @@ test(
           method: "POST",
           url: "/api/v1/meal-analysis",
           headers: user(owner),
-          payload: { inputType: "TEXT", inputReference },
+          payload: {
+            inputType: "TEXT",
+            inputReference,
+            reviewTranscript: true,
+          },
         });
       const voiceResponse = await textDraft(transcript);
       assert.equal(voiceResponse.statusCode, 202);

@@ -56,7 +56,7 @@ export async function transcribeMealAudio(audio: Blob, signal: AbortSignal) {
 
 export async function startTextAnalysis(transcript: string, signal: AbortSignal) {
   const { data } = await apiRequest<MealAnalysis>("/meal-analysis", {
-    method: "POST", body: JSON.stringify({ inputType: "TEXT", inputReference: transcript }),
+    method: "POST", body: JSON.stringify({ inputType: "TEXT", inputReference: transcript, reviewTranscript: true }),
     signal,
   });
   if (data.status !== "READY") throw new Error("Text analysis is unavailable. Enter the meal manually.");
