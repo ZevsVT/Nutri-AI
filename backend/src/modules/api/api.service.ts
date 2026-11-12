@@ -992,17 +992,29 @@ export class PrismaBusinessApiService implements BusinessApiService {
       mealType?: MealInput["mealType"];
     },
   ) {
-    const existing = await this.prisma.meal.findFirst({
-      where: { id, userId, deletedAt: null },
-      select: { id: true, status: true },
+    const where = { id, userId, deletedAt: null };
+    const changesDateOrType = Boolean(input.mealType || input.capturedAt);
+    const updated = await this.prisma.meal.updateMany({
+      where: {
+        ...where,
+        ...(changesDateOrType ? { status: { not: "CONFIRMED" } } : {}),
+      },
+      data: input,
     });
-    if (!existing) throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
-    if (existing.status === "CONFIRMED" && (input.mealType || input.capturedAt))
-      throw new AppError(
-        "INVALID_STATE",
-        "Confirmed meal nutrition cannot be changed",
-      );
-    await this.prisma.meal.update({ where: { id }, data: input });
+    if (!updated.count) {
+      if (
+        changesDateOrType &&
+        (await this.prisma.meal.findFirst({
+          where: { ...where, status: "CONFIRMED" },
+          select: { id: true },
+        }))
+      )
+        throw new AppError(
+          "INVALID_STATE",
+          "Confirmed meal date and type cannot be changed",
+        );
+      throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
+    }
     return this.getMeal(userId, id);
   }
 

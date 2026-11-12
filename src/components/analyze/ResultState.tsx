@@ -9,7 +9,7 @@ const nutrients = [
   ["fiber", "Fiber", "g"],
 ] as const satisfies ReadonlyArray<readonly [keyof SavedNutrition, string, string]>;
 
-function NutritionSummary({ totals }: { totals: SavedNutrition }) {
+export function NutritionSummary({ totals }: { totals: SavedNutrition }) {
   return (
     <dl className="result-nutrition-grid">
       {nutrients.map(([key, name, unit]) => (

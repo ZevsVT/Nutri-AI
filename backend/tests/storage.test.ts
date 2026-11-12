@@ -526,6 +526,132 @@ test(
       assert.equal(failure.json().data.status, "FAILED");
       assert.equal(failure.json().data.error.code, "AI_ANALYSIS_ERROR");
       assert.doesNotMatch(failure.body, /private provider detail/);
+
+      const capturedAt = "2026-02-04T23:59:59.999Z";
+      const manual = await app.inject({
+        method: "POST",
+        url: "/api/v1/meals",
+        headers: user(owner),
+        payload: {
+          name: "Manual fixture",
+          mealType: "DINNER",
+          capturedAt,
+          items: [{ foodId: food.id, quantity: 100, unit: "g" }],
+        },
+      });
+      assert.equal(manual.statusCode, 201);
+      const manualId = manual.json().data.id;
+      const list = (id: string, type = "DINNER") =>
+        app.inject({
+          method: "GET",
+          headers: user(id),
+          url: `/api/v1/meals?mealType=${type}&from=2026-02-04T00:00:00.000Z&to=${capturedAt}&status=CONFIRMED`,
+        });
+      assert.deepEqual(
+        (await list(owner)).json().data.map(({ id }: { id: string }) => id),
+        [manualId],
+      );
+      assert.deepEqual((await list(owner, "BREAKFAST")).json().data, []);
+      assert.deepEqual((await list(other)).json().data, []);
+      const manualPath = `/api/v1/meals/${manualId}`;
+      assert.equal(
+        (
+          await app.inject({
+            method: "GET",
+            url: manualPath,
+            headers: user(other),
+          })
+        ).statusCode,
+        404,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: "PATCH",
+            url: manualPath,
+            headers: user(other),
+            payload: { name: "Foreign" },
+          })
+        ).statusCode,
+        404,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: "PATCH",
+            url: manualPath,
+            headers: user(owner),
+            payload: { mealType: "SNACK" },
+          })
+        ).statusCode,
+        409,
+      );
+      const edit = await app.inject({
+        method: "PATCH",
+        url: manualPath,
+        headers: user(owner),
+        payload: { name: "Updated", notes: "A note" },
+      });
+      assert.equal(edit.statusCode, 200);
+      const detail = (
+        await app.inject({
+          method: "GET",
+          url: manualPath,
+          headers: user(owner),
+        })
+      ).json().data;
+      assert.equal(detail.name, "Updated");
+      assert.equal(detail.notes, "A note");
+      assert.equal(detail.items[0].provenance.version, "test-v1");
+      assert.equal(
+        (
+          await app.inject({
+            method: "DELETE",
+            url: manualPath,
+            headers: user(other),
+          })
+        ).statusCode,
+        404,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: "DELETE",
+            url: manualPath,
+            headers: user(owner),
+          })
+        ).statusCode,
+        204,
+      );
+      assert.deepEqual((await list(owner)).json().data, []);
+
+      const photoPath = `/api/v1/meals/${job.mealId}`;
+      const dailyPath = `/api/v1/nutrition/daily?date=${confirmed.json().data.capturedAt.slice(0, 10)}`;
+      const daily = async () =>
+        (
+          await app.inject({
+            method: "GET",
+            url: dailyPath,
+            headers: user(owner),
+          })
+        ).json().data;
+      assert.equal((await daily()).totals.calories, 225);
+      assert.equal(
+        (
+          await app.inject({
+            method: "DELETE",
+            url: photoPath,
+            headers: user(owner),
+          })
+        ).statusCode,
+        204,
+      );
+      const retained = await prisma.storedObject.findUniqueOrThrow({
+        where: { id: storage.parseReference(reference) },
+      });
+      assert.equal(retained.status, "RETAINED");
+      assert.ok(retained.expiresAt);
+      assert.equal((await daily()).totals.calories, 0);
     } finally {
       await app.close();
       await prisma.user.deleteMany({ where: { id: { in: [owner, other] } } });

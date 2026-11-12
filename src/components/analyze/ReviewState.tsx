@@ -17,10 +17,12 @@ export function ReviewState({
   predictions,
   onConfirm,
   onCancel,
+  manual = false,
 }: {
   predictions: AnalysisPrediction[];
   onConfirm: (items: Array<MealEntryInput & { predictionId?: string }>) => Promise<void>;
   onCancel: () => void;
+  manual?: boolean;
 }) {
   const [rows, setRows] = useState<ReviewRow[]>(() => predictions.map((item) => ({
     key: item.id,
@@ -80,9 +82,9 @@ export function ReviewState({
 
   return (
     <section className="card">
-      <h3>Review meal suggestions</h3>
+      {!manual && <h3>Review meal suggestions</h3>}
       <p>Check each food and enter the amount you ate before confirming.</p>
-      {!rows.length && <p>There are no suggestions to review. Add a food from the catalog or try another photo.</p>}
+      {!rows.length && <p>{manual ? "Add a food from the catalog." : "There are no suggestions to review. Add a food from the catalog or try another photo."}</p>}
       <fieldset disabled={saving} style={{ border: 0, padding: 0 }}>
         {rows.map((row, index) => (
           <fieldset key={row.key} className="form-group">
@@ -128,7 +130,7 @@ export function ReviewState({
       </fieldset>
       {error && <p role="alert">{error}</p>}
       <Button variant="primary" loading={saving} onClick={() => void save()}>Confirm meal</Button>
-      <Button disabled={saving} onClick={onCancel}>Discard and start again</Button>
+      <Button disabled={saving} onClick={onCancel}>{manual ? "Cancel" : "Discard and start again"}</Button>
     </section>
   );
 }

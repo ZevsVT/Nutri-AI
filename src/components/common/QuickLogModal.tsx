@@ -1,174 +1,61 @@
 import { useState } from "react";
-import { Icon } from "../../icons";
+import { ReviewState } from "../analyze/ReviewState";
+import { ApiError } from "../../services/apiClient";
+import { createMeal, localDateTime, mealTypes, type SavedMeal } from "../../services/mealService";
 import { Modal } from "./Modal";
-import { Button } from "./Button";
-import { searchFoods } from "../../data";
-import type { FoodDatabaseEntry, Meal, MealType } from "../../types";
 
-interface QuickLogModalProps {
-  isOpen: boolean;
+export function QuickLogModal({ onClose, onSaveMeal, onExpired }: {
   onClose: () => void;
-  onSaveMeal: (meal: Meal) => void;
-}
-
-export function QuickLogModal({
-  isOpen,
-  onClose,
-  onSaveMeal,
-}: QuickLogModalProps) {
-  const [mealType, setMealType] = useState<MealType>("Snack");
-  const [customName, setCustomName] = useState("");
-  const [selectedFood, setSelectedFood] = useState<FoodDatabaseEntry | null>(null);
-  const [amountGrams, setAmountGrams] = useState(150);
-
-  const handleSelectFood = (food: FoodDatabaseEntry) => {
-    setSelectedFood(food);
-    setCustomName(food.name);
-    setAmountGrams(food.defaultAmount);
-  };
-
-  const handleSave = () => {
-    if (!customName.trim()) return;
-
-    const baseCal = selectedFood ? selectedFood.calories : 150;
-    const basePro = selectedFood ? selectedFood.protein : 12;
-    const baseCarb = selectedFood ? selectedFood.carbs : 18;
-    const baseFat = selectedFood ? selectedFood.fat : 5;
-    const baseFib = selectedFood ? selectedFood.fiber : 3;
-
-    const multiplier = amountGrams / 100;
-
-    const newMeal: Meal = {
-      id: `manual-log-${Date.now()}`,
-      type: mealType,
-      name: customName,
-      description: `${amountGrams}g portion · Manually logged`,
-      time: "Just now",
-      date: "Today, Aug 22",
-      art: "meal-art--breakfast",
-      image: "/images/chicken-bowl.jpg",
-      calories: Math.round(baseCal * multiplier),
-      protein: Math.round(basePro * multiplier),
-      carbs: Math.round(baseCarb * multiplier),
-      fat: Math.round(baseFat * multiplier),
-      fiber: Math.round(baseFib * multiplier),
-      confidence: 1.0,
-      portion: `${amountGrams} g`,
-      tags: [mealType, "Manual Entry"],
-      source: selectedFood ? selectedFood.source : "User Entry",
-    };
-
-    onSaveMeal(newMeal);
-    setCustomName("");
-    setSelectedFood(null);
-    onClose();
-  };
+  onSaveMeal: (meal: SavedMeal) => void;
+  onExpired: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [mealType, setMealType] = useState<SavedMeal["mealType"]>("OTHER");
+  const [capturedAt, setCapturedAt] = useState(() => localDateTime());
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const close = () => { if (!saving) onClose(); };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Quick Food Log"
-      subtitle="Log a meal or snack quickly from canonical nutrition databases."
-    >
-      <div className="form-group">
-        <label className="form-label">Meal Type</label>
-        <div style={{ display: "flex", gap: "6px" }}>
-          {(["Breakfast", "Lunch", "Dinner", "Snack"] as MealType[]).map((type) => (
-            <button
-              key={type}
-              type="button"
-              className={`btn btn-sm ${mealType === type ? "btn-primary" : "btn-secondary"}`}
-              onClick={() => setMealType(type)}
-              style={{ flex: 1, fontSize: "0.75rem" }}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="quick-food-name" className="form-label">Food Name or Dish</label>
-        <input
-          id="quick-food-name"
-          className="form-input"
-          value={customName}
-          onChange={(e) => setCustomName(e.target.value)}
-          placeholder="e.g. Grilled Salmon, Broken Rice, Tofu..."
-        />
-      </div>
-
-      {/* Suggested Quick Picks */}
-      <div style={{ marginBottom: "var(--space-4)" }}>
-        <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "6px" }}>
-          Quick Database Picks:
-        </span>
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-          {searchFoods.slice(0, 5).map((food) => (
-            <button
-              key={food.id}
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => handleSelectFood(food)}
-              style={{
-                fontSize: "0.75rem",
-                padding: "4px 8px",
-                borderColor: selectedFood?.id === food.id ? "var(--brand-primary)" : "var(--border-subtle)",
-                backgroundColor: selectedFood?.id === food.id ? "var(--brand-primary-subtle)" : "transparent",
-              }}
-            >
-              {food.name.split("(")[0]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Portion Grams */}
-      <div
-        style={{
-          padding: "var(--space-3) var(--space-4)",
-          backgroundColor: "var(--bg-surface-subtle)",
-          borderRadius: "var(--radius-md)",
-          marginBottom: "var(--space-5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>Portion Weight (grams):</span>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setAmountGrams((g) => Math.max(25, g - 25))}
-          >
-            -25g
-          </button>
-          <strong style={{ minWidth: "50px", textAlign: "center" }}>{amountGrams}g</strong>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setAmountGrams((g) => g + 25)}
-          >
-            +25g
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)" }}>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          icon="check"
-          disabled={!customName.trim()}
-          onClick={handleSave}
-        >
-          Add to Food Diary
-        </Button>
-      </div>
+    <Modal isOpen onClose={close} title="Log a meal" wide>
+      <fieldset disabled={saving} style={{ border: 0, padding: 0 }}>
+        <label className="form-label">
+          Meal name
+          <input className="form-input" value={name} maxLength={160} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="form-label">
+          Meal type
+          <select className="form-input" value={mealType} onChange={(e) => setMealType(e.target.value as SavedMeal["mealType"])}>
+            {Object.entries(mealTypes).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          </select>
+        </label>
+        <label className="form-label">
+          Date and time
+          <input className="form-input" value={capturedAt} type="datetime-local" onChange={(e) => setCapturedAt(e.target.value)} />
+        </label>
+        <label className="form-label">
+          Notes
+          <textarea className="form-input" value={notes} maxLength={5000} onChange={(e) => setNotes(e.target.value)} />
+        </label>
+      </fieldset>
+      <ReviewState predictions={[]} manual onCancel={close} onConfirm={async (items) => {
+        const date = new Date(capturedAt);
+        if (!Number.isFinite(date.getTime())) throw new Error("Enter a valid date and time.");
+        setSaving(true);
+        try {
+          const meal = await createMeal({
+            mealType, capturedAt: date.toISOString(), name: name.trim() || items[0]?.displayName || "Meal",
+            notes, items,
+          });
+          onSaveMeal(meal);
+          onClose();
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 401) onExpired();
+          throw error;
+        } finally {
+          setSaving(false);
+        }
+      }} />
     </Modal>
   );
 }
