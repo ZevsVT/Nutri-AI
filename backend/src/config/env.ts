@@ -82,8 +82,9 @@ const rawEnvironmentSchema = z.object({
   STORAGE_READ_URL_TTL_SECONDS: optionalNumber(900, 60, 604_800),
   STORAGE_TEMPORARY_TTL_HOURS: optionalNumber(24, 1, 168),
   STORAGE_RETENTION_DAYS: optionalNumber(30, 1, 3_650),
-  AI_PROVIDER: z.string().min(1).default("none"),
+  AI_PROVIDER: z.enum(["none", "openai"]).default("none"),
   AI_API_KEY: emptyStringAsUndefined,
+  AI_VISION_MODEL: z.string().trim().min(1).max(80).default("gpt-4.1-mini"),
   NUTRITION_PROVIDER: z.string().min(1).default("none"),
   NUTRITION_API_KEY: emptyStringAsUndefined,
   LOG_LEVEL: z
@@ -130,6 +131,7 @@ export interface AppConfig {
   storageRetentionDays: number;
   aiProvider: string;
   aiApiKey?: string;
+  aiVisionModel: string;
   nutritionProvider: string;
   nutritionApiKey?: string;
   logLevel: LogLevel;
@@ -224,6 +226,12 @@ export function loadConfig(
     );
   }
 
+  if (parsed.AI_PROVIDER !== "none" && !parsed.DATABASE_URL) {
+    configurationIssues.push(
+      "DATABASE_URL is required to persist AI analysis jobs",
+    );
+  }
+
   if (parsed.NUTRITION_PROVIDER !== "none" && !parsed.NUTRITION_API_KEY) {
     configurationIssues.push(
       "NUTRITION_API_KEY is required when NUTRITION_PROVIDER is configured",
@@ -279,6 +287,7 @@ export function loadConfig(
     storageRetentionDays: parsed.STORAGE_RETENTION_DAYS,
     aiProvider: parsed.AI_PROVIDER,
     aiApiKey: parsed.AI_API_KEY,
+    aiVisionModel: parsed.AI_VISION_MODEL,
     nutritionProvider: parsed.NUTRITION_PROVIDER,
     nutritionApiKey: parsed.NUTRITION_API_KEY,
     logLevel: parsed.LOG_LEVEL,

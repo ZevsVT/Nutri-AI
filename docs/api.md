@@ -60,6 +60,24 @@ request ID and server logs for diagnosis.
 
 ## Confirmation semantics
 
+### Photo recognition
+
+Send a private JPEG, PNG, or WebP through `POST /api/v1/storage/uploads`,
+then post `{"inputType":"IMAGE","inputReference":"storage://object/{uuid}"}`
+to `POST /api/v1/meal-analysis`. Each uploaded object can be attached to
+one photo job. If a `mealId` is supplied, it must be an owned, empty draft.
+The returned `analysisId` is used to poll the status. `READY` includes
+stable prediction IDs, original labels, a canonical food ID for each
+unique catalog match, and optional model confidence. Unmatched candidates
+have `foodId: null`. A photo with no identifiable food is ready with an
+empty list. The provider, requested model, and returned model version
+are recorded with the analysis.
+
+On failure, `GET /api/v1/meal-analysis/:id` returns `FAILED` with a
+sanitized `AI_ANALYSIS_ERROR` when a job could not finish. Users can
+retry by uploading the photo again, choose another photo, or enter food
+manually. Photo suggestions do not produce confirmed meals or snapshots.
+
 Recognition predictions are not nutrition facts. Confirmation validates the
 user-owned analysis and every corrected food, resolves the active nutrition
 source/version, calculates portions, writes `MealItemNutrition` snapshots, and

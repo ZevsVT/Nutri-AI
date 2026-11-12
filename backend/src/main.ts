@@ -5,6 +5,8 @@ import { buildApp } from "./app/app.js";
 import { installSignalHandlers } from "./app/shutdown.js";
 import { loadConfig } from "./config/env.js";
 import { createPrismaDatabase } from "./integrations/database/prisma-database.js";
+import { OpenAiMealVision } from "./integrations/ai/openai-vision.js";
+import { ImageAnalysisWorker } from "./modules/meals/image-analysis.worker.js";
 import { PrismaAuthRepository } from "./modules/auth/auth.repository.js";
 import { PrismaBarcodeProvider } from "./modules/foods/barcode.service.js";
 import { PrismaBusinessApiService } from "./modules/api/api.service.js";
@@ -23,6 +25,14 @@ dotenv.config({ path: resolve(process.cwd(), ".env") });
 
 const config = loadConfig();
 const database = createPrismaDatabase(config.databaseUrl);
+const vision =
+  config.aiProvider === "openai" && config.aiApiKey
+    ? new OpenAiMealVision(
+        config.aiVisionModel,
+        config.aiApiKey,
+        config.externalRequestTimeoutMs,
+      )
+    : undefined;
 const storageService = new StorageService(
   createStorageProvider(config),
   database
@@ -49,6 +59,7 @@ try {
           database.client,
           new PrismaBarcodeProvider(database.client),
           storageService,
+          vision,
         )
       : undefined,
     storageService,
@@ -56,6 +67,16 @@ try {
       ? [{ name: "database", check: () => database.ping() }]
       : [],
   });
+  if (vision && database) {
+    const worker = new ImageAnalysisWorker(
+      database.client,
+      storageService,
+      vision,
+      app.log,
+    );
+    app.addHook("onReady", async () => worker.start());
+    app.addHook("onClose", () => worker.stop());
+  }
 } catch (error) {
   await closeDatabase();
   throw error;

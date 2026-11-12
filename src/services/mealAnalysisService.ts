@@ -1,0 +1,57 @@
+import { apiRequest } from "./apiClient";
+
+export interface AnalysisPrediction {
+  id: string;
+  predictedName: string;
+  foodId: string | null;
+  quantity: number | null;
+  unit: string | null;
+  confidence: number | null;
+}
+
+export interface MealAnalysis {
+  analysisId: string;
+  mealId: string;
+  status: "PENDING" | "PROCESSING" | "READY" | "FAILED";
+  predictions: AnalysisPrediction[];
+  error?: { code: string; message: string };
+}
+
+export async function startImageAnalysis(file: File, signal: AbortSignal) {
+  const body = new FormData();
+  body.set("file", file);
+  const { data: upload } = await apiRequest<{ objectId: string; reference: string }>(
+    "/storage/uploads", { method: "POST", body, signal },
+  );
+  try {
+    const { data } = await apiRequest<MealAnalysis>("/meal-analysis", {
+      method: "POST",
+      body: JSON.stringify({ inputType: "IMAGE", inputReference: upload.reference }),
+      signal,
+    });
+    return data;
+  } catch (error) {
+    void apiRequest(`/storage/objects/${upload.objectId}`, { method: "DELETE" }).catch(() => {});
+    throw error;
+  }
+}
+
+export async function pollMealAnalysis(
+  initial: MealAnalysis,
+  signal: AbortSignal,
+) {
+  let analysis = initial;
+  while (analysis.status === "PENDING" || analysis.status === "PROCESSING") {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    signal.throwIfAborted();
+    const { data } = await apiRequest<MealAnalysis>(
+      `/meal-analysis/${analysis.analysisId}`, { signal },
+    );
+    analysis = data;
+  }
+  return analysis;
+}
+
+export function discardMealAnalysis(mealId: string) {
+  return apiRequest(`/meals/${mealId}`, { method: "DELETE" });
+}

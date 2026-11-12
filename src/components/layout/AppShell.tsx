@@ -168,10 +168,7 @@ export function AppShell() {
           )}
 
           {activeView === "analyze" && (
-            <AnalyzeView
-              onSaveMeal={handleAddMeal}
-              onNavigate={handleNavigate}
-            />
+            <AnalyzeView onOpenManual={() => setIsQuickLogOpen(true)} />
           )}
 
           {activeView === "diary" && (

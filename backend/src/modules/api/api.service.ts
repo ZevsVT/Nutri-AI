@@ -22,6 +22,7 @@ import {
   type NutritionRecordLike,
 } from "../nutrition/nutrition-record.js";
 import type { StorageService } from "../storage/storage.service.js";
+import type { MealVisionProvider } from "../../integrations/ai/openai-vision.js";
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
 import { activeFoodWhere } from "../foods/food.repository.js";
 import {
@@ -86,6 +87,9 @@ export interface AnalysisDto {
   status: "PENDING" | "PROCESSING" | "READY" | "FAILED";
   inputType: string;
   inputReference: string | null;
+  provider?: string;
+  model?: string;
+  modelVersion?: string | null;
   predictions: Array<{
     id: string;
     predictedName: string;
@@ -680,6 +684,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
       prisma,
     ),
     private readonly storageService?: StorageService,
+    private readonly vision?: Pick<MealVisionProvider, "provider" | "model">,
   ) {}
 
   async searchFoods({
@@ -977,14 +982,8 @@ export class PrismaBusinessApiService implements BusinessApiService {
     userId: string,
     input: { mealId?: string; inputType: string; inputReference: string },
   ) {
-    if (input.inputType === "IMAGE") {
-      if (!this.storageService)
-        throw new AppError("STORAGE_ERROR", "Storage is not configured");
-      await this.storageService.getByReferenceForUser(
-        input.inputReference,
-        userId,
-      );
-    }
+    if (input.inputType === "IMAGE")
+      return this.createImageAnalysis(userId, input);
     let mealId = input.mealId;
     if (mealId) {
       const meal = await this.prisma.meal.findFirst({
@@ -992,11 +991,6 @@ export class PrismaBusinessApiService implements BusinessApiService {
         select: { id: true },
       });
       if (!meal) throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
-      if (input.inputType === "IMAGE")
-        await this.prisma.meal.update({
-          where: { id: mealId },
-          data: { imageUrl: input.inputReference, status: "ANALYZING" },
-        });
     } else
       mealId = (
         await this.prisma.meal.create({
@@ -1005,7 +999,6 @@ export class PrismaBusinessApiService implements BusinessApiService {
             mealType: "OTHER",
             capturedAt: new Date(),
             status: "ANALYZING",
-            imageUrl: input.inputReference,
           },
           select: { id: true },
         })
@@ -1020,15 +1013,97 @@ export class PrismaBusinessApiService implements BusinessApiService {
         inputReference: input.inputReference,
       },
     });
-    if (input.inputType === "IMAGE")
-      await this.storageService?.attachForUser(input.inputReference, userId);
+    return this.analysisDto(analysis, []);
+  }
+
+  private async createImageAnalysis(
+    userId: string,
+    input: { mealId?: string; inputReference: string },
+  ) {
+    if (!this.storageService)
+      throw new AppError("STORAGE_ERROR", "Storage is not configured");
+    const object = await this.storageService.getByReferenceForUser(
+      input.inputReference,
+      userId,
+    );
+    const vision = this.vision;
+    if (!vision)
+      throw new AppError(
+        "AI_ANALYSIS_ERROR",
+        "Photo analysis is unavailable. Enter the meal manually.",
+      );
+
+    const analysis = await this.prisma.$transaction(async (tx) => {
+      const attached = await tx.storedObject.updateMany({
+        where: {
+          id: object.id,
+          ownerId: userId,
+          status: "UPLOADED",
+          deletedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        data: { status: "ATTACHED", expiresAt: null },
+      });
+      if (!attached.count)
+        throw new AppError(
+          "STORAGE_INVALID_OBJECT",
+          "Upload a new photo for this analysis",
+        );
+
+      let mealId = input.mealId;
+      const data = {
+        status: "ANALYZING",
+        imageUrl: input.inputReference,
+      } as const;
+      if (mealId) {
+        const updated = await tx.meal.updateMany({
+          where: {
+            id: mealId,
+            userId,
+            deletedAt: null,
+            status: "DRAFT",
+            imageUrl: null,
+          },
+          data,
+        });
+        if (!updated.count) {
+          const owned = await tx.meal.findFirst({
+            where: { id: mealId, userId, deletedAt: null },
+            select: { id: true },
+          });
+          if (!owned)
+            throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
+          throw new AppError(
+            "INVALID_STATE",
+            "Only an empty meal draft can receive a new photo",
+          );
+        }
+      } else {
+        const meal = await tx.meal.create({
+          data: { ...data, userId, mealType: "OTHER", capturedAt: new Date() },
+        });
+        mealId = meal.id;
+      }
+      return tx.aIAnalysis.create({
+        data: {
+          userId,
+          mealId,
+          provider: vision.provider,
+          model: vision.model,
+          inputType: "IMAGE",
+          inputReference: input.inputReference,
+        },
+      });
+    });
     return this.analysisDto(analysis, []);
   }
 
   async getAnalysis(userId: string, id: string) {
     const analysis = await this.prisma.aIAnalysis.findFirst({
-      where: { id, userId },
-      include: { predictions: true },
+      where: { id, userId, meal: { userId, deletedAt: null } },
+      include: {
+        predictions: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      },
     });
     if (!analysis)
       throw new AppError("ANALYSIS_NOT_FOUND", "Meal analysis was not found");
@@ -1349,6 +1424,11 @@ export class PrismaBusinessApiService implements BusinessApiService {
       status: string;
       inputType: string;
       inputReference: string | null;
+      provider: string;
+      model: string;
+      modelVersion: string | null;
+      errorCode: string | null;
+      errorMessage: string | null;
     },
     predictions: readonly PredictionLike[],
   ): AnalysisDto {
@@ -1363,6 +1443,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
             : (analysis.status as AnalysisDto["status"]),
       inputType: analysis.inputType,
       inputReference: analysis.inputReference ?? null,
+      provider: analysis.provider,
+      model: analysis.model,
+      modelVersion: analysis.modelVersion,
+      ...(analysis.status === "FAILED" &&
+      analysis.errorCode &&
+      analysis.errorMessage
+        ? {
+            error: { code: analysis.errorCode, message: analysis.errorMessage },
+          }
+        : {}),
       predictions: predictions.map((prediction) => ({
         id: prediction.id,
         predictedName: prediction.predictedName,

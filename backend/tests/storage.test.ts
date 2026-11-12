@@ -1,12 +1,23 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app/app.js";
 import { loadConfig, type AppConfig } from "../src/config/env.js";
 import { createObjectKey } from "../src/common/uploads/file-policy.js";
 import { S3StorageProvider } from "../src/integrations/storage/storage-provider.js";
+import { OpenAiMealVision } from "../src/integrations/ai/openai-vision.js";
+import { PrismaBusinessApiService } from "../src/modules/api/api.service.js";
+import { ImageAnalysisWorker } from "../src/modules/meals/image-analysis.worker.js";
+import { PrismaStorageObjectRepository } from "../src/modules/storage/storage.repository.js";
+import {
+  createStorageProvider,
+  StorageService,
+} from "../src/modules/storage/storage.service.js";
+import { normalizeFoodText } from "../src/modules/foods/food-taxonomy.js";
 
 const image = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -218,3 +229,202 @@ test("S3 read URLs use the configured short-lived TTL and do not expose secrets"
   assert.equal(url.includes("server-secret-value"), false);
   assert.equal(parsed.searchParams.get("X-Amz-SignedHeaders"), "host");
 });
+
+test("vision requests use private bytes and validate completed structured responses", async () => {
+  const valid = [
+    { label: "Phở bò", confidence: 0.8 },
+    { label: "Rau thơm", confidence: null },
+  ];
+  for (const items of [valid, [], [{ label: "Invalid", confidence: 4 }]]) {
+    const adapter = new OpenAiMealVision(
+      "test-model",
+      "test-key",
+      1000,
+      async (url, init) => {
+        assert.equal(url, "https://api.openai.com/v1/responses");
+        const body = JSON.parse(String(init?.body));
+        assert.equal(body.store, false);
+        assert.equal(body.text.format.strict, true);
+        assert.equal(
+          body.input[0].content[0].image_url,
+          `data:image/png;base64,${image.toString("base64")}`,
+        );
+        return Response.json({
+          model: "test-model-version",
+          status: "completed",
+          output: [
+            {
+              type: "message",
+              content: [
+                { type: "output_text", text: JSON.stringify({ items }) },
+              ],
+            },
+          ],
+        });
+      },
+    );
+    const result = adapter.analyze({ bytes: image, contentType: "image/png" });
+    if (items.length === 1) await assert.rejects(result);
+    else
+      assert.deepEqual(await result, {
+        modelVersion: "test-model-version",
+        items,
+      });
+  }
+  const failing = new OpenAiMealVision(
+    "test-model",
+    "test-key",
+    1000,
+    async () => new Response("private diagnostics", { status: 503 }),
+  );
+  await assert.rejects(
+    failing.analyze({ bytes: image, contentType: "image/png" }),
+    (error: Error) => !error.message.includes("private diagnostics"),
+  );
+});
+
+test(
+  "owned image jobs are claimed once and persist stable candidates without confirming meals",
+  { skip: !process.env.DATABASE_URL && "DATABASE_URL is not configured" },
+  async () => {
+    const prisma = new PrismaClient();
+    const owner = randomUUID();
+    const other = randomUUID();
+    const label = `Phở bò ${owner.slice(0, 8)}`;
+    const root = await mkdtemp(join(tmpdir(), "nutri-ai-vision-"));
+    const appConfig = config(root, {
+      RATE_LIMIT_ENABLED: "false",
+      LOG_LEVEL: "silent",
+    });
+    const storage = new StorageService(
+      createStorageProvider(appConfig),
+      new PrismaStorageObjectRepository(prisma),
+      appConfig,
+    );
+    let resultMode: "success" | "empty" | "fail" = "success";
+    let calls = 0;
+    const vision = {
+      provider: owner,
+      model: "test-model",
+      async analyze(input: { bytes: Uint8Array }) {
+        calls += 1;
+        assert.deepEqual(Buffer.from(input.bytes), image);
+        if (resultMode === "fail") throw new Error("private provider detail");
+        return {
+          modelVersion: "test-version",
+          items:
+            resultMode === "empty"
+              ? []
+              : [
+                  { label, confidence: 0.9 },
+                  { label: `Rau thơm ${owner}`, confidence: null },
+                ],
+        };
+      },
+    };
+    const app = await buildApp({
+      config: appConfig,
+      storageService: storage,
+      businessApiService: new PrismaBusinessApiService(
+        prisma,
+        undefined,
+        storage,
+        vision,
+      ),
+    });
+    const worker = new ImageAnalysisWorker(prisma, storage, vision, app.log);
+    try {
+      await prisma.user.createMany({
+        data: [owner, other].map((id) => ({ id, email: `${id}@test.local` })),
+      });
+      const food = await prisma.food.create({
+        data: {
+          canonicalName: label,
+          nameVi: label,
+          normalizedName: normalizeFoodText(label),
+        },
+      });
+      const upload = () =>
+        storage.uploadImage(
+          {
+            ownerId: owner,
+            fileName: "meal.png",
+            bytes: image,
+            contentType: "image/png",
+          },
+          () => "",
+        );
+      const create = (id: string, inputReference: string) =>
+        app.inject({
+          method: "POST",
+          url: "/api/v1/meal-analysis",
+          headers: user(id),
+          payload: { inputType: "IMAGE", inputReference },
+        });
+      const get = (id: string, analysisId: string) =>
+        app.inject({
+          method: "GET",
+          url: `/api/v1/meal-analysis/${analysisId}`,
+          headers: user(id),
+        });
+      const { reference } = await upload();
+      assert.equal((await create(other, reference)).statusCode, 404);
+      const queued = await create(owner, reference);
+      assert.equal(queued.statusCode, 202);
+      const job = queued.json().data;
+      assert.equal(job.status, "PENDING");
+      assert.equal((await get(other, job.analysisId)).statusCode, 404);
+      assert.equal((await create(owner, reference)).statusCode, 400);
+      await Promise.all([worker.processNext(), worker.processNext()]);
+      assert.equal(calls, 1);
+      const ready = (await get(owner, job.analysisId)).json().data;
+      assert.equal(ready.status, "READY");
+      assert.equal(ready.modelVersion, "test-version");
+      assert.equal(
+        ready.predictions.find(
+          (item: { predictedName: string }) => item.predictedName === label,
+        ).foodId,
+        food.id,
+      );
+      assert.equal(
+        ready.predictions.find(
+          (item: { predictedName: string }) => item.predictedName !== label,
+        ).foodId,
+        null,
+      );
+      assert.deepEqual((await get(owner, job.analysisId)).json().data, ready);
+      assert.equal(
+        await prisma.mealItem.count({ where: { mealId: job.mealId } }),
+        0,
+      );
+      assert.equal(
+        (await prisma.meal.findUniqueOrThrow({ where: { id: job.mealId } }))
+          .status,
+        "REVIEW",
+      );
+
+      resultMode = "empty";
+      const empty = (await create(owner, (await upload()).reference)).json()
+        .data;
+      await worker.processNext();
+      const emptyResult = (await get(owner, empty.analysisId)).json().data;
+      assert.equal(emptyResult.status, "READY");
+      assert.deepEqual(emptyResult.predictions, []);
+
+      resultMode = "fail";
+      const failed = (await create(owner, (await upload()).reference)).json()
+        .data;
+      await worker.processNext();
+      const failure = await get(owner, failed.analysisId);
+      assert.equal(failure.json().data.status, "FAILED");
+      assert.equal(failure.json().data.error.code, "AI_ANALYSIS_ERROR");
+      assert.doesNotMatch(failure.body, /private provider detail/);
+    } finally {
+      await app.close();
+      await prisma.user.deleteMany({ where: { id: { in: [owner, other] } } });
+      await prisma.food.deleteMany({ where: { canonicalName: label } });
+      await prisma.$disconnect();
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
