@@ -275,7 +275,7 @@ controlled fixtures; source review is not repeated over the network in CI.
 - [x] Migrations work on clean and populated isolated PostgreSQL schemas.
 - [x] Automated tests cover validation, lookup, imports, nutrition and API behavior.
 - [x] Documentation describes the implemented behavior.
-- [x] Frontend camera scanning remains explicitly simulated.
+- [x] The packaged-food catalog shipped before camera decoding. The web scanner is tracked in [#23](https://github.com/ZevsVT/Nutri-AI/issues/23).
 - [x] Hosted CI passed for implementation commit `76b7b5d`:
       [GitHub Actions run 38592959307](https://github.com/ZevsVT/Nutri-AI/actions/runs/38592959307).
       Frontend and backend validation passed, including 64 tests with zero
