@@ -151,7 +151,7 @@ export function BarcodeScannerModal({ onClose, onSaveMeal, onManual, onExpired }
         <form onSubmit={(event) => { event.preventDefault(); void lookup(barcode.trim()); }}>
           <label className="form-label">
             Barcode digits
-            <input className="form-input" inputMode="numeric" autoComplete="off" value={barcode} maxLength={64}
+            <input className="form-input" inputMode="numeric" autoComplete="off" value={barcode} maxLength={64} disabled={looking}
               onChange={(event) => {
                 setBarcode(event.target.value);
                 setProduct(null);
