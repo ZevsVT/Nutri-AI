@@ -15,7 +15,9 @@ const itemSchema = z
   })
   .strict();
 const rangeFields = { from: date.optional(), to: date.optional() };
-const withValidRange = <T extends z.AnyZodObject>(schema: T) =>
+const withValidRange = <T extends z.ZodType<{ from?: Date; to?: Date }>>(
+  schema: T,
+) =>
   schema.refine((value) => !value.from || !value.to || value.from <= value.to, {
     message: "from must be before or equal to to",
     path: ["from"],

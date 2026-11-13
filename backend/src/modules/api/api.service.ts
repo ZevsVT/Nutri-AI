@@ -75,7 +75,18 @@ export interface MealDto {
   status: string;
   notes: string | null;
   confirmedAt: string | null;
-  items: Array<MealItemInput & { id: string; nutrition?: NutritionTotals }>;
+  items: Array<
+    MealItemInput & {
+      id: string;
+      nutrition?: NutritionTotals;
+      provenance?: {
+        source: string;
+        version: string;
+        servingAmount: number;
+        servingUnit: string;
+      };
+    }
+  >;
   totals: NutritionTotals;
   imageReference: string | null;
 }
@@ -243,6 +254,10 @@ type MealItemLike = {
     carbohydrates: unknown;
     fat: unknown;
     fiber: unknown;
+    servingAmount?: unknown;
+    servingUnit?: string;
+    source?: { name: string };
+    nutritionVersion?: { version: string };
   } | null;
 };
 type MealLike = {
@@ -926,7 +941,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
     const meal = await this.prisma.meal.findFirst({
       where: { id, userId, deletedAt: null },
       include: {
-        items: { include: { food: true, nutritionSnapshot: true } },
+        items: {
+          include: {
+            nutritionSnapshot: {
+              include: {
+                source: { select: { name: true } },
+                nutritionVersion: { select: { version: true } },
+              },
+            },
+          },
+        },
         nutrition: true,
       },
     });
@@ -944,17 +968,29 @@ export class PrismaBusinessApiService implements BusinessApiService {
       mealType?: MealInput["mealType"];
     },
   ) {
-    const existing = await this.prisma.meal.findFirst({
-      where: { id, userId, deletedAt: null },
-      select: { id: true, status: true },
+    const where = { id, userId, deletedAt: null };
+    const changesDateOrType = Boolean(input.mealType || input.capturedAt);
+    const updated = await this.prisma.meal.updateMany({
+      where: {
+        ...where,
+        ...(changesDateOrType ? { status: { not: "CONFIRMED" } } : {}),
+      },
+      data: input,
     });
-    if (!existing) throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
-    if (existing.status === "CONFIRMED" && (input.mealType || input.capturedAt))
-      throw new AppError(
-        "INVALID_STATE",
-        "Confirmed meal nutrition cannot be changed",
-      );
-    await this.prisma.meal.update({ where: { id }, data: input });
+    if (!updated.count) {
+      if (
+        changesDateOrType &&
+        (await this.prisma.meal.findFirst({
+          where: { ...where, status: "CONFIRMED" },
+          select: { id: true },
+        }))
+      )
+        throw new AppError(
+          "INVALID_STATE",
+          "Confirmed meal date and type cannot be changed",
+        );
+      throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
+    }
     return this.getMeal(userId, id);
   }
 
@@ -1324,6 +1360,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
             fiber: nullableNumber(item.nutritionSnapshot.fiber),
           }
         : undefined,
+      provenance:
+        item.nutritionSnapshot?.source &&
+        item.nutritionSnapshot.nutritionVersion
+          ? {
+              source: item.nutritionSnapshot.source.name,
+              version: item.nutritionSnapshot.nutritionVersion.version,
+              servingAmount: Number(item.nutritionSnapshot.servingAmount),
+              servingUnit: item.nutritionSnapshot.servingUnit ?? item.unit,
+            }
+          : undefined,
     }));
     return {
       id: meal.id,
