@@ -9,7 +9,6 @@ import { CommandPalette } from "../common/CommandPalette";
 import { Toast } from "../common/Toast";
 import { QuickLogModal } from "../common/QuickLogModal";
 import { AccountModal } from "../common/AccountModal";
-import { BarcodeScannerModal } from "../common/BarcodeScannerModal";
 import { DashboardView } from "../dashboard/DashboardView";
 import { AccountDiary } from "../diary/AccountDiary";
 import { InsightsView } from "../insights/InsightsView";
@@ -52,7 +51,6 @@ export function AppShell() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
-  const [isBarcodeOpen, setIsBarcodeOpen] = useState(false);
   const [selectedMealForModal, setSelectedMealForModal] = useState<Meal | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
@@ -71,7 +69,6 @@ export function AppShell() {
   const handleSession = useCallback((user: AuthUser | null) => {
     setAuthUser(user);
     setIsQuickLogOpen(false);
-    setIsBarcodeOpen(false);
     setSelectedMealId(null);
   }, []);
   const handleExpired = useCallback(() => {
@@ -252,19 +249,12 @@ export function AppShell() {
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={handleNavigate}
         onOpenQuickLog={openQuickLog}
-        onOpenBarcode={() => authUser ? setIsBarcodeOpen(true) : setIsAccountOpen(true)}
       />
 
       {isAccountOpen && <AccountModal user={authUser} onSession={handleSession} onClose={() => setIsAccountOpen(false)} />}
       {isQuickLogOpen && authUser && (
         <QuickLogModal onClose={() => setIsQuickLogOpen(false)} onSaveMeal={handleSavedMeal} onExpired={handleExpired} />
       )}
-
-      <BarcodeScannerModal
-        isOpen={isBarcodeOpen}
-        onClose={() => setIsBarcodeOpen(false)}
-        onLogScannedFood={openQuickLog}
-      />
 
       <MealDetailModal
         meal={selectedMealForModal}
