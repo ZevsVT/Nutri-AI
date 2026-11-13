@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "../../services/apiClient";
 import { canLogProduct, saveScannedProduct, scanBarcode, type BarcodeProduct } from "../../services/barcodeService";
 import type { SavedMeal } from "../../services/mealService";
-import { NutritionSummary } from "../analyze/ResultState";
+import { NutritionSummary } from "./NutritionSummary";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 
