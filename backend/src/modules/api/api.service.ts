@@ -26,6 +26,7 @@ import type { MealVisionProvider } from "../../integrations/ai/openai-vision.js"
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
 import { activeFoodWhere } from "../foods/food.repository.js";
 import { portionEvidenceSchema } from "../meals/portion-estimation.js";
+import { correctionFeedback } from "../meals/correction-feedback.js";
 import {
   rankFoods,
   searchTokens,
@@ -165,6 +166,7 @@ export interface BusinessApiService {
     userId: string,
     id: string,
     items: ReviewedMealItem[],
+    reviewedPredictions?: true,
   ): Promise<MealDto>;
   dailyNutrition(userId: string, date: Date): Promise<Record<string, unknown>>;
   weeklyNutrition(
@@ -1160,11 +1162,29 @@ export class PrismaBusinessApiService implements BusinessApiService {
     return this.analysisDto(analysis, analysis.predictions);
   }
 
-  async confirmAnalysis(userId: string, id: string, items: ReviewedMealItem[]) {
+  async confirmAnalysis(
+    userId: string,
+    id: string,
+    items: ReviewedMealItem[],
+    reviewedPredictions?: true,
+  ) {
     const mealId = await this.prisma.$transaction(async (tx) => {
       const analysis = await tx.aIAnalysis.findFirst({
         where: { id, userId },
-        select: { id: true, mealId: true, status: true },
+        select: {
+          id: true,
+          mealId: true,
+          status: true,
+          predictions: {
+            select: {
+              id: true,
+              foodId: true,
+              predictedName: true,
+              estimatedQuantity: true,
+              estimatedUnit: true,
+            },
+          },
+        },
       });
       if (!analysis)
         throw new AppError("ANALYSIS_NOT_FOUND", "Meal analysis was not found");
@@ -1200,12 +1220,14 @@ export class PrismaBusinessApiService implements BusinessApiService {
       const predictionIds = items.flatMap(({ predictionId }) =>
         predictionId ? [predictionId] : [],
       );
+      const ownedPredictions = new Set(
+        analysis.predictions.map(({ id: predictionId }) => predictionId),
+      );
       if (
         predictionIds.length !== new Set(predictionIds).size ||
-        (predictionIds.length &&
-          (await tx.aIFoodPrediction.count({
-            where: { id: { in: predictionIds }, analysisId: id },
-          })) !== predictionIds.length)
+        predictionIds.some(
+          (predictionId) => !ownedPredictions.has(predictionId),
+        )
       )
         throw new AppError(
           "VALIDATION_ERROR",
@@ -1269,17 +1291,6 @@ export class PrismaBusinessApiService implements BusinessApiService {
             estimated: nutrition.mappingType !== "EXACT_MATCH",
           },
         });
-        await tx.aICorrection.create({
-          data: {
-            analysisId: analysis.id,
-            predictionId: item.predictionId,
-            userId,
-            correctionType: "FOOD_ADDED",
-            correctedFoodId: food.id,
-            correctedQuantity: item.quantity,
-            correctedUnit: item.unit,
-          },
-        });
       }
       await tx.nutritionAnalysis.upsert({
         where: { mealId: meal.id },
@@ -1301,10 +1312,20 @@ export class PrismaBusinessApiService implements BusinessApiService {
           totalFiber: totals.fiber,
         },
       });
-      await tx.aIAnalysis.update({
-        where: { id },
-        data: { status: "COMPLETED", completedAt: new Date() },
-      });
+      if (reviewedPredictions || predictionIds.length) {
+        const corrections = correctionFeedback(
+          analysis.id,
+          userId,
+          analysis.predictions,
+          items,
+        );
+        if (corrections.length)
+          await tx.aICorrection.createMany({ data: corrections });
+        await tx.aIAnalysis.update({
+          where: { id },
+          data: { feedbackRecordedAt: new Date() },
+        });
+      }
       return meal.id;
     });
     return this.getMeal(userId, mealId);

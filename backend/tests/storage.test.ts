@@ -18,11 +18,79 @@ import {
   StorageService,
 } from "../src/modules/storage/storage.service.js";
 import { normalizeFoodText } from "../src/modules/foods/food-taxonomy.js";
+import { FoodRepository } from "../src/modules/foods/food.repository.js";
+import { correctionFeedback } from "../src/modules/meals/correction-feedback.js";
+import {
+  correctionEvaluationConsent,
+  correctionReport,
+} from "../src/modules/meals/correction-report.js";
 
 const image = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
 );
+
+test("correction types distinguish repeated foods and combined edits", () => {
+  const prediction = {
+    id: "p1",
+    foodId: "food",
+    predictedName: "Phở bò",
+    estimatedQuantity: 100,
+    estimatedUnit: "g",
+  };
+  const same = {
+    predictionId: "p1",
+    foodId: "food",
+    displayName: "Phở bò",
+    quantity: 100,
+    unit: "g",
+  };
+  assert.deepEqual(
+    correctionFeedback("analysis", "owner", [prediction], [same]),
+    [],
+  );
+  const changes = correctionFeedback(
+    "analysis",
+    "owner",
+    [prediction, { ...prediction, id: "p2" }],
+    [
+      {
+        ...same,
+        foodId: "other",
+        displayName: "Bún bò",
+        quantity: 220,
+        unit: "ml",
+      },
+      { foodId: "food", quantity: 50, unit: "g" },
+    ],
+  );
+  assert.deepEqual(
+    changes.map(({ correctionType }) => correctionType),
+    [
+      "FOOD_REPLACED",
+      "NAME_CORRECTED",
+      "PORTION_CHANGED",
+      "FOOD_ADDED",
+      "FOOD_REMOVED",
+    ],
+  );
+  assert.equal(changes[1]?.originalDisplayName, "Phở bò");
+  assert.equal(changes[1]?.correctedDisplayName, "Bún bò");
+  assert.equal(changes[2]?.originalQuantity, 100);
+  assert.equal(changes[2]?.correctedQuantity, 220);
+  assert.equal(changes[4]?.predictionId, "p2");
+  assert.throws(() =>
+    correctionFeedback("analysis", "owner", [prediction], [same, same]),
+  );
+  assert.throws(() =>
+    correctionFeedback(
+      "analysis",
+      "owner",
+      [prediction],
+      [{ ...same, predictionId: "foreign" }],
+    ),
+  );
+});
 
 function multipart(
   bytes: Uint8Array,
@@ -291,6 +359,7 @@ test(
     const owner = randomUUID();
     const other = randomUUID();
     const label = `Phở bò ${owner.slice(0, 8)}`;
+    const alternative = `Alias fixture ${owner.slice(0, 8)}`;
     const root = await mkdtemp(join(tmpdir(), "nutri-ai-vision-"));
     const appConfig = config(root, {
       RATE_LIMIT_ENABLED: "false",
@@ -353,6 +422,24 @@ test(
           normalizedName: normalizeFoodText(label),
         },
       });
+      await prisma.food.create({
+        data: {
+          canonicalName: alternative,
+          nameVi: alternative,
+          aliases: {
+            create: {
+              alias: normalizeFoodText(label),
+              normalizedAlias: normalizeFoodText(label),
+            },
+          },
+        },
+      });
+      const catalog = new FoodRepository(prisma);
+      assert.equal(await catalog.matchCanonicalFood(label), food.id);
+      assert.equal(
+        await catalog.matchCanonicalFood(normalizeFoodText(label)),
+        null,
+      );
       const source = await prisma.foodSource.create({
         data: {
           id: owner,
@@ -474,6 +561,12 @@ test(
       assert.equal(incompatible.statusCode, 400);
       assert.match(incompatible.json().error.message, /Item 2/);
       assert.equal(
+        await prisma.aICorrection.count({
+          where: { analysisId: job.analysisId },
+        }),
+        0,
+      );
+      assert.equal(
         await prisma.mealItem.count({ where: { mealId: job.mealId } }),
         0,
       );
@@ -495,6 +588,87 @@ test(
       });
       assert.equal(snapshot.nutritionVersionId, version.id);
       assert.equal(snapshot.sourceId, source.id);
+      const corrections = await prisma.aICorrection.findMany({
+        where: { analysisId: job.analysisId },
+        orderBy: { correctionType: "asc" },
+      });
+      assert.deepEqual(
+        corrections.map(({ correctionType }) => correctionType),
+        ["FOOD_REMOVED", "PORTION_CHANGED"],
+      );
+      const tracked = await prisma.aIAnalysis.findUniqueOrThrow({
+        where: { id: job.analysisId },
+      });
+      assert.ok(tracked.feedbackRecordedAt);
+      const findModel = async () =>
+        (await correctionReport(prisma)).models.find(
+          ({ provider }) => provider === vision.provider,
+        );
+      assert.equal(await findModel(), undefined);
+      const consent = await prisma.userConsent.create({
+        data: {
+          userId: owner,
+          consentType: "AI_PROCESSING",
+          version: correctionEvaluationConsent,
+          status: "GRANTED",
+          grantedAt: new Date(),
+        },
+      });
+      const legacyMeal = await prisma.meal.create({
+        data: {
+          userId: owner,
+          mealType: "OTHER",
+          capturedAt: new Date(),
+          confirmedAt: new Date(),
+          status: "CONFIRMED",
+        },
+      });
+      await prisma.aIAnalysis.create({
+        data: {
+          userId: owner,
+          mealId: legacyMeal.id,
+          provider: vision.provider,
+          model: vision.model,
+          modelVersion: "test-version",
+          inputType: "IMAGE",
+          status: "COMPLETED",
+          corrections: {
+            create: {
+              userId: owner,
+              correctionType: "FOOD_ADDED",
+              correctedFoodId: food.id,
+            },
+          },
+        },
+      });
+      const group = await findModel();
+      assert.ok(group);
+      assert.equal(group.reviews, 1);
+      assert.equal(group.predictions, 2);
+      assert.equal(group.unchangedPredictions, 0);
+      assert.equal(group.correctionsPerPrediction.FOOD_REMOVED, 0.5);
+      assert.equal(group.correctionsPerPrediction.PORTION_CHANGED, 0.5);
+      assert.equal(group.additionsPerReview, 0);
+      assert.equal(group.legacyReviews, 1);
+      assert.equal(group.legacyRows, 1);
+      const report = await correctionReport(prisma);
+      assert.ok(
+        report.topCatalogCorrections.some(
+          (row) => row.food === label && row.correction === "PORTION_CHANGED",
+        ),
+      );
+      for (const value of [
+        job.analysisId,
+        job.mealId,
+        reference,
+        recognized.id,
+      ])
+        assert.ok(!JSON.stringify(report).includes(value));
+      await prisma.userConsent.update({
+        where: { id: consent.id },
+        data: { status: "REVOKED", revokedAt: new Date() },
+      });
+      assert.equal(await findModel(), undefined);
       assert.equal(
         await prisma.mealItem.count({ where: { mealId: job.mealId } }),
         1,
@@ -528,13 +702,19 @@ test(
       assert.doesNotMatch(failure.body, /private provider detail/);
     } finally {
       await app.close();
+      await prisma.userConsent.deleteMany({ where: { userId: owner } });
       await prisma.user.deleteMany({ where: { id: { in: [owner, other] } } });
       await prisma.foodNutrition.deleteMany({
         where: { nutritionVersion: { sourceId: owner } },
       });
       await prisma.nutritionVersion.deleteMany({ where: { sourceId: owner } });
       await prisma.foodSource.deleteMany({ where: { id: owner } });
-      await prisma.food.deleteMany({ where: { canonicalName: label } });
+      await prisma.foodAlias.deleteMany({
+        where: { food: { canonicalName: alternative } },
+      });
+      await prisma.food.deleteMany({
+        where: { canonicalName: { in: [label, alternative] } },
+      });
       await prisma.$disconnect();
       await rm(root, { recursive: true, force: true });
     }

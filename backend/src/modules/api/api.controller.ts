@@ -143,6 +143,7 @@ export class ApiController {
           request.user!.id,
           request.params.id,
           request.body.items,
+          request.body.reviewedPredictions,
         ),
       ),
     );

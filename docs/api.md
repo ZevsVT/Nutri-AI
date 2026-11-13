@@ -105,6 +105,12 @@ saved portion when provenance is available. The Analyze cancel action uses
 `DELETE /api/v1/meals/:id?draftOnly=true` so discarding a draft cannot delete
 a meal that has already been confirmed.
 
+The web review also sends `reviewedPredictions: true` with its final list.
+This distinguishes a review that replaces every prediction from an older
+confirmation that supplied no prediction IDs. Completed reviews with an
+explicit final list or at least one linked prediction can produce feedback.
+Feedback and nutrition snapshots commit together.
+
 Meal ownership is enforced in the service/repository boundary using the
 authenticated user ID. A missing owned resource is reported as a stable
 `MEAL_NOT_FOUND`, `FOOD_NOT_FOUND`, or `ANALYSIS_NOT_FOUND` error rather than
