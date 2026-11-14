@@ -107,6 +107,14 @@ marks the meal confirmed in one transaction. Snapshots are write-once and all
 daily/weekly totals read those snapshots. Retrying a completed confirmation is
 safe and does not recalculate historical values.
 
+An item can include its original `predictionId` when the user keeps or edits
+a prediction. Each ID must belong to the owned analysis and appear only once.
+New items omit it and removed suggestions are absent from the final list.
+Confirmed meal details include snapshot source and version alongside the
+saved portion when provenance is available. The Analyze cancel action uses
+`DELETE /api/v1/meals/:id?draftOnly=true` so discarding a draft cannot delete
+a meal that has already been confirmed.
+
 Meal ownership is enforced in the service/repository boundary using the
 authenticated user ID. A missing owned resource is reported as a stable
 `MEAL_NOT_FOUND`, `FOOD_NOT_FOUND`, or `ANALYSIS_NOT_FOUND` error rather than

@@ -10,6 +10,7 @@ import { Toast } from "../common/Toast";
 import { QuickLogModal } from "../common/QuickLogModal";
 import { AccountModal } from "../common/AccountModal";
 import { DashboardView } from "../dashboard/DashboardView";
+import { AnalyzeView } from "../analyze/AnalyzeView";
 import { AccountDiary } from "../diary/AccountDiary";
 import { InsightsView } from "../insights/InsightsView";
 import { AssistantView } from "../assistant/AssistantView";
@@ -189,10 +190,7 @@ export function AppShell() {
           )}
 
           {activeView === "analyze" && authUser && (
-            <section className="card">
-              <h2>Log a meal</h2>
-              <Button variant="primary" onClick={openQuickLog}>Enter food manually</Button>
-            </section>
+            <AnalyzeView onOpenManual={openQuickLog} onMealSaved={handleSavedMeal} />
           )}
 
           {activeView === "diary" && authUser &&

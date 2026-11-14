@@ -584,6 +584,18 @@ test(
       assert.equal(job.status, "PENDING");
       assert.equal((await get(other, job.analysisId)).statusCode, 404);
       assert.equal((await create(owner, reference)).statusCode, 400);
+      const submit = (userId: string, items: unknown[]) =>
+        app.inject({
+          method: "POST",
+          url: `/api/v1/meal-analysis/${job.analysisId}/confirm`,
+          headers: user(userId),
+          payload: { items },
+        });
+      assert.equal(
+        (await submit(owner, [{ foodId: food.id, quantity: 150, unit: "g" }]))
+          .statusCode,
+        409,
+      );
       await Promise.all([worker.processNext(), worker.processNext()]);
       assert.equal(calls, 1);
       const ready = (await get(owner, job.analysisId)).json().data;
@@ -613,13 +625,58 @@ test(
           .status,
         "REVIEW",
       );
-      const confirmed = await app.inject({
-        method: "POST",
-        url: `/api/v1/meal-analysis/${job.analysisId}/confirm`,
-        headers: user(owner),
-        payload: { items: [{ foodId: food.id, quantity: 150, unit: "g" }] },
-      });
+      const finalItems = [
+        {
+          foodId: food.id,
+          quantity: 150,
+          unit: "g",
+          predictionId: recognized.id,
+        },
+      ];
+      assert.equal((await submit(other, finalItems)).statusCode, 404);
+      assert.equal(
+        (
+          await submit(owner, [
+            { ...finalItems[0], predictionId: randomUUID() },
+          ])
+        ).statusCode,
+        400,
+      );
+      const incompatible = await submit(owner, [
+        ...finalItems,
+        { foodId: food.id, quantity: 100, unit: "ml" },
+      ]);
+      assert.equal(incompatible.statusCode, 400);
+      assert.match(incompatible.json().error.message, /Item 2/);
+      assert.equal(
+        await prisma.mealItem.count({ where: { mealId: job.mealId } }),
+        0,
+      );
+      const [confirmed, duplicate] = await Promise.all([
+        submit(owner, finalItems),
+        submit(owner, finalItems),
+      ]);
       assert.equal(confirmed.statusCode, 200);
+      assert.equal(duplicate.statusCode, 200);
+      const saved = confirmed.json().data;
+      assert.equal(saved.id, job.mealId);
+      assert.deepEqual(duplicate.json().data, saved);
+      const diary = await app.inject({
+        url: "/api/v1/meals?status=CONFIRMED",
+        headers: user(owner),
+      });
+      assert.equal(diary.statusCode, 200);
+      assert.deepEqual(diary.json().data, [saved]);
+      const detail = await app.inject({
+        url: `/api/v1/meals/${saved.id}`,
+        headers: user(owner),
+      });
+      assert.equal(detail.statusCode, 200);
+      assert.deepEqual(detail.json().data, saved);
+      assert.equal(
+        confirmed.json().data.items[0].provenance.version,
+        "test-v1",
+      );
       assert.equal(confirmed.json().data.totals.calories, 225);
       assert.equal(confirmed.json().data.totals.protein, null);
       const snapshot = await prisma.mealItemNutrition.findFirstOrThrow({
@@ -627,6 +684,20 @@ test(
       });
       assert.equal(snapshot.nutritionVersionId, version.id);
       assert.equal(snapshot.sourceId, source.id);
+      assert.equal(
+        await prisma.mealItem.count({ where: { mealId: job.mealId } }),
+        1,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: "DELETE",
+            url: `/api/v1/meals/${job.mealId}?draftOnly=true`,
+            headers: user(owner),
+          })
+        ).statusCode,
+        409,
+      );
 
       resultMode = "empty";
       const empty = (await create(owner, (await upload()).reference)).json()

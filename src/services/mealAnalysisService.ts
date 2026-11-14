@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import type { MealEntryInput, SavedMeal } from "./mealService";
 
 export interface AnalysisPrediction {
   id: string;
@@ -60,5 +61,14 @@ export async function pollMealAnalysis(
 }
 
 export function discardMealAnalysis(mealId: string) {
-  return apiRequest(`/meals/${mealId}`, { method: "DELETE" });
+  return apiRequest(`/meals/${mealId}?draftOnly=true`, { method: "DELETE" });
+}
+
+export async function confirmMealAnalysis(
+  analysisId: string,
+  items: Array<MealEntryInput & { predictionId?: string }>,
+) {
+  return (await apiRequest<SavedMeal>(`/meal-analysis/${analysisId}/confirm`, {
+    method: "POST", body: JSON.stringify({ items }),
+  })).data;
 }

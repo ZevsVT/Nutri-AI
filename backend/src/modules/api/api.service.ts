@@ -61,6 +61,14 @@ export interface MealItemInput {
   displayName?: string;
 }
 
+type ReviewedMealItem = MealItemInput & { predictionId?: string };
+type NutritionProvenance = {
+  source: string;
+  version: string;
+  servingAmount: number;
+  servingUnit: string;
+};
+
 export interface MealInput {
   mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "OTHER";
   capturedAt: Date;
@@ -81,12 +89,7 @@ export interface MealDto {
     MealItemInput & {
       id: string;
       nutrition?: NutritionTotals;
-      provenance?: {
-        source: string;
-        version: string;
-        servingAmount: number;
-        servingUnit: string;
-      };
+      provenance?: NutritionProvenance;
     }
   >;
   totals: NutritionTotals;
@@ -152,7 +155,7 @@ export interface BusinessApiService {
       mealType?: MealInput["mealType"];
     },
   ): Promise<MealDto>;
-  deleteMeal(userId: string, id: string): Promise<void>;
+  deleteMeal(userId: string, id: string, draftOnly?: boolean): Promise<void>;
   createAnalysis(
     userId: string,
     input: { mealId?: string; inputType: string; inputReference: string },
@@ -161,7 +164,7 @@ export interface BusinessApiService {
   confirmAnalysis(
     userId: string,
     id: string,
-    items: MealItemInput[],
+    items: ReviewedMealItem[],
   ): Promise<MealDto>;
   dailyNutrition(userId: string, date: Date): Promise<Record<string, unknown>>;
   weeklyNutrition(
@@ -467,8 +470,10 @@ export class InMemoryBusinessApiService implements BusinessApiService {
     return this.publicMeal(meal);
   }
 
-  async deleteMeal(userId: string, id: string) {
+  async deleteMeal(userId: string, id: string, draftOnly = false) {
     const meal = this.findMeal(userId, id);
+    if (draftOnly && meal.status === "CONFIRMED")
+      throw new AppError("INVALID_STATE", "This meal is already confirmed");
     meal.deleted = true;
     await this.storageService?.retainAfterMealDelete(
       meal.imageReference,
@@ -499,6 +504,10 @@ export class InMemoryBusinessApiService implements BusinessApiService {
         })
       ).id;
     const meal = this.findMeal(userId, mealId);
+    if (!input.mealId) {
+      meal.status = "ANALYZING";
+      meal.confirmedAt = null;
+    }
     if (input.inputType === "IMAGE") meal.imageReference = input.inputReference;
     const analysis: MemoryAnalysis = {
       analysisId: randomUUID(),
@@ -526,6 +535,7 @@ export class InMemoryBusinessApiService implements BusinessApiService {
     if (analysis.status === "PENDING" || analysis.status === "PROCESSING")
       throw new AppError("ANALYSIS_NOT_READY", "Meal analysis is not ready");
     const meal = this.findMeal(userId, analysis.mealId);
+    if (meal.status === "CONFIRMED") return this.publicMeal(meal);
     const mapped = items.map((item) => this.toMealItem(item));
     meal.items = mapped;
     meal.status = "CONFIRMED";
@@ -942,7 +952,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
         skip: (input.page - 1) * input.pageSize,
         take: input.pageSize,
         include: {
-          items: { include: { food: true, nutritionSnapshot: true } },
+          items: {
+            include: {
+              nutritionSnapshot: {
+                include: {
+                  source: { select: { name: true } },
+                  nutritionVersion: { select: { version: true } },
+                },
+              },
+            },
+          },
           nutrition: true,
         },
       }),
@@ -1008,14 +1027,21 @@ export class PrismaBusinessApiService implements BusinessApiService {
     return this.getMeal(userId, id);
   }
 
-  async deleteMeal(userId: string, id: string) {
+  async deleteMeal(userId: string, id: string, draftOnly = false) {
     const meal = await this.prisma.meal.findFirst({
       where: { id, userId, deletedAt: null },
-      select: { imageUrl: true },
+      select: { imageUrl: true, status: true },
     });
     if (!meal) throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
+    if (draftOnly && meal.status === "CONFIRMED")
+      throw new AppError("INVALID_STATE", "This meal is already confirmed");
     const result = await this.prisma.meal.updateMany({
-      where: { id, userId, deletedAt: null },
+      where: {
+        id,
+        userId,
+        deletedAt: null,
+        ...(draftOnly ? { status: { not: "CONFIRMED" } } : {}),
+      },
       data: { deletedAt: new Date(), status: "DELETED" },
     });
     if (result.count === 0)
@@ -1155,7 +1181,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
     return this.analysisDto(analysis, analysis.predictions);
   }
 
-  async confirmAnalysis(userId: string, id: string, items: MealItemInput[]) {
+  async confirmAnalysis(userId: string, id: string, items: ReviewedMealItem[]) {
     const mealId = await this.prisma.$transaction(async (tx) => {
       const analysis = await tx.aIAnalysis.findFirst({
         where: { id, userId },
@@ -1173,6 +1199,39 @@ export class PrismaBusinessApiService implements BusinessApiService {
       });
       if (!meal) throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
       if (meal.status === "CONFIRMED" && meal.confirmedAt) return meal.id;
+      // The conditional write locks the meal before any snapshot changes.
+      // Concurrent requests recheck the status after the first commit.
+      const claim = await tx.meal.updateMany({
+        where: {
+          id: meal.id,
+          userId,
+          deletedAt: null,
+          status: { not: "CONFIRMED" },
+        },
+        data: { status: "CONFIRMED", confirmedAt: new Date() },
+      });
+      if (!claim.count) {
+        const saved = await tx.meal.findFirst({
+          where: { id: meal.id, userId, deletedAt: null, status: "CONFIRMED" },
+          select: { id: true },
+        });
+        if (saved) return saved.id;
+        throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
+      }
+      const predictionIds = items.flatMap(({ predictionId }) =>
+        predictionId ? [predictionId] : [],
+      );
+      if (
+        predictionIds.length !== new Set(predictionIds).size ||
+        (predictionIds.length &&
+          (await tx.aIFoodPrediction.count({
+            where: { id: { in: predictionIds }, analysisId: id },
+          })) !== predictionIds.length)
+      )
+        throw new AppError(
+          "VALIDATION_ERROR",
+          "Review items must reference distinct predictions from this analysis",
+        );
       const foods = await tx.food.findMany({
         where: {
           id: { in: items.map((item) => item.foodId) },
@@ -1192,7 +1251,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
         );
       await tx.mealItem.deleteMany({ where: { mealId: meal.id } });
       const totals = emptyTotals();
-      for (const item of items) {
+      for (const [index, item] of items.entries()) {
         const food = foods.find((candidate) => candidate.id === item.foodId);
         const nutrition = latestNutrition(
           food?.nutritionRecords ?? [],
@@ -1201,9 +1260,15 @@ export class PrismaBusinessApiService implements BusinessApiService {
         if (!food || !nutrition)
           throw new AppError(
             "NUTRITION_DATA_UNAVAILABLE",
-            "Nutrition data is unavailable for one or more foods",
+            `Nutrition data is unavailable for item ${index + 1}`,
           );
-        const values = scaledNutrition(nutrition, item.quantity, item.unit);
+        let values;
+        try {
+          values = scaledNutrition(nutrition, item.quantity, item.unit);
+        } catch (error) {
+          if (!(error instanceof AppError)) throw error;
+          throw new AppError(error.code, `Item ${index + 1}: ${error.message}`);
+        }
         Object.assign(totals, addTotals(totals, values));
         const created = await tx.mealItem.create({
           data: {
@@ -1228,6 +1293,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
         await tx.aICorrection.create({
           data: {
             analysisId: analysis.id,
+            predictionId: item.predictionId,
             userId,
             correctionType: "FOOD_ADDED",
             correctedFoodId: food.id,
@@ -1255,10 +1321,6 @@ export class PrismaBusinessApiService implements BusinessApiService {
           totalFat: totals.fat,
           totalFiber: totals.fiber,
         },
-      });
-      await tx.meal.update({
-        where: { id: meal.id },
-        data: { status: "CONFIRMED", confirmedAt: new Date() },
       });
       await tx.aIAnalysis.update({
         where: { id },
