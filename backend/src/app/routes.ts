@@ -271,8 +271,10 @@ export async function registerRoutes(
     `${API_PREFIX}/meals/:id`,
     {
       ...privateRoute,
-      ...validate("params", idParamsSchema),
-      ...validate("body", updateMealSchema),
+      preValidation: [
+        validateRequest("params", idParamsSchema),
+        validateRequest("body", updateMealSchema),
+      ],
     },
     handler(apiController.updateMeal),
   );

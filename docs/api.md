@@ -58,7 +58,47 @@ request ID and server logs for diagnosis.
 | `GET /storage/objects/:id/url` | Required | Authenticated short-lived read URL or local API URL |
 | `DELETE /storage/objects/:id` | Required | Delete an unattached upload |
 
+## Meal diary
+
+The web diary uses authenticated `GET /api/v1/meals` with server-side
+pagination and optional meal type, status, and date filters. Its date picker
+uses the browser's local day and sends inclusive ISO `from` and `to`
+boundaries. After a save the diary can read the existing meal by its returned
+ID. `PATCH /api/v1/meals/:id` accepts name and notes, and accepts date or
+meal type while the meal is unconfirmed. `DELETE` soft-deletes the entry
+and applies private image retention when an image is attached.
+
 ## Confirmation semantics
+
+### Photo recognition
+
+Send a private JPEG, PNG, or WebP through `POST /api/v1/storage/uploads`,
+then post `{"inputType":"IMAGE","inputReference":"storage://object/{uuid}"}`
+to `POST /api/v1/meal-analysis`. Each uploaded object can be attached to
+one photo job. If a `mealId` is supplied, it must be an owned, empty draft.
+The returned `analysisId` is used to poll the status. `READY` includes
+stable prediction IDs, original labels, a canonical food ID for each
+unique catalog match, and optional model confidence. Unmatched candidates
+have `foodId: null`. A photo with no identifiable food is ready with an
+empty list. The provider, requested model, and returned model version
+are recorded with the analysis.
+
+Each candidate may include `quantity`, `unit`, and `portionEstimate`.
+The latter includes separate portion confidence, the evidence basis, and
+the nutrition source and version used to check the unit. For example, a
+visible 0.2 kg scale reading can be expressed as 200 g when the matched
+food has a mass reference. A 300 mL marking uses a volume reference.
+Counting two visible labeled servings uses a documented per-serving
+reference, such as 45 g per serving, to produce an estimated 90 g.
+The serving reference is included in the response for counted servings.
+Low-confidence, incompatible, and unmeasurable portions have null
+estimates. Users enter or edit the amount during review. The server uses
+the submitted amount and unit for confirmation.
+
+On failure, `GET /api/v1/meal-analysis/:id` returns `FAILED` with a
+sanitized `AI_ANALYSIS_ERROR` when a job could not finish. Users can
+retry by uploading the photo again, choose another photo, or enter food
+manually. Photo suggestions do not produce confirmed meals or snapshots.
 
 Recognition predictions are not nutrition facts. Confirmation validates the
 user-owned analysis and every corrected food, resolves the active nutrition

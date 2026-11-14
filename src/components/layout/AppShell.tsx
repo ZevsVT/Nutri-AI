@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useCallback, useState, useMemo, useEffect } from "react";
 import { ReviewWorkspace } from "../admin/ReviewWorkspace";
 import { Button } from "../common/Button";
 import { getCurrentUser, type AuthUser } from "../../services/authService";
@@ -8,10 +8,9 @@ import { BottomNav } from "./BottomNav";
 import { CommandPalette } from "../common/CommandPalette";
 import { Toast } from "../common/Toast";
 import { QuickLogModal } from "../common/QuickLogModal";
-import { BarcodeScannerModal } from "../common/BarcodeScannerModal";
+import { AccountModal } from "../common/AccountModal";
 import { DashboardView } from "../dashboard/DashboardView";
-import { AnalyzeView } from "../analyze/AnalyzeView";
-import { DiaryView } from "../diary/DiaryView";
+import { AccountDiary } from "../diary/AccountDiary";
 import { InsightsView } from "../insights/InsightsView";
 import { AssistantView } from "../assistant/AssistantView";
 import { RecipesView } from "../recipes/RecipesView";
@@ -19,6 +18,7 @@ import { ProfileView } from "../profile/ProfileView";
 import { MealDetailModal } from "../diary/MealDetailModal";
 import { initialMeals, initialUserProfile } from "../../data";
 import type { ChatMessage, Meal, UserGoals, UserProfile, View } from "../../types";
+import type { SavedMeal } from "../../services/mealService";
 
 const initialChatMessages: ChatMessage[] = [
   {
@@ -31,18 +31,26 @@ const initialChatMessages: ChatMessage[] = [
 
 export function AppShell() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
   useEffect(() => {
-    getCurrentUser().then(r => setAuthUser(r.user)).catch(() => {});
+    let mounted = true;
+    void getCurrentUser().then((result) => {
+      if (mounted) setAuthUser(result.user);
+    }).catch(() => {}).finally(() => {
+      if (mounted) setCheckingSession(false);
+    });
+    return () => { mounted = false; };
   }, []);
   const [activeView, setActiveView] = useState<View>("dashboard");
-  const [meals, setMeals] = useState<Meal[]>(initialMeals);
+  const [mealRevision, setMealRevision] = useState(0);
+  const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile>(initialUserProfile);
   const [waterMl, setWaterMl] = useState<number>(1400);
   const [plantCount, setPlantCount] = useState<number>(4);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
-  const [isBarcodeOpen, setIsBarcodeOpen] = useState(false);
   const [selectedMealForModal, setSelectedMealForModal] = useState<Meal | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
@@ -58,14 +66,24 @@ export function AppShell() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleAddMeal = (newMeal: Meal) => {
-    setMeals((prev) => [newMeal, ...prev.filter((m) => m.id !== newMeal.id)]);
-    setToastMessage(`"${newMeal.name}" has been saved to your Food Diary`);
+  const handleSession = useCallback((user: AuthUser | null) => {
+    setAuthUser(user);
+    setIsQuickLogOpen(false);
+    setSelectedMealId(null);
+  }, []);
+  const handleExpired = useCallback(() => {
+    handleSession(null);
+    setIsAccountOpen(true);
+  }, [handleSession]);
+  const refreshMeals = () => setMealRevision((value) => value + 1);
+  const handleSavedMeal = (meal: SavedMeal) => {
+    refreshMeals();
+    setSelectedMealId(meal.id);
+    setToastMessage(`"${meal.name}" saved to your Food Diary`);
   };
-
-  const handleDeleteMeal = (mealId: string) => {
-    setMeals((prev) => prev.filter((m) => m.id !== mealId));
-    setToastMessage("Meal entry removed from diary");
+  const openQuickLog = () => {
+    if (authUser) setIsQuickLogOpen(true);
+    else setIsAccountOpen(true);
   };
 
   const handleAddWater = (amount: number) => {
@@ -117,7 +135,7 @@ export function AppShell() {
       userProfile,
       waterMl,
       plantCount,
-      meals,
+      ...(authUser ? {} : { meals: initialMeals }),
       chatMessages,
       exportedAt: new Date().toISOString(),
     };
@@ -148,15 +166,18 @@ export function AppShell() {
         />
 
         <main className="page-content-wrapper">
+          <Button disabled={checkingSession} onClick={() => setIsAccountOpen(true)}>
+            {authUser ? "Account" : "Sign in"}
+          </Button>
           {activeView !== "food-reviews" && (
             <Button onClick={() => handleNavigate("food-reviews")}>
-              {authUser?.permissions.includes("food-reviews:read") ? "Food data reviews" : "Staff sign in"}
+              Food data reviews
             </Button>
           )}
-          {activeView === "food-reviews" && <ReviewWorkspace onSession={setAuthUser} />}
+          {activeView === "food-reviews" && <ReviewWorkspace onSession={handleSession} />}
           {activeView === "dashboard" && (
             <DashboardView
-              meals={meals}
+              meals={initialMeals}
               userProfile={userProfile}
               waterMl={waterMl}
               plantCount={plantCount}
@@ -167,20 +188,27 @@ export function AppShell() {
             />
           )}
 
-          {activeView === "analyze" && (
-            <AnalyzeView
-              onSaveMeal={handleAddMeal}
-              onNavigate={handleNavigate}
-            />
+          {activeView === "analyze" && authUser && (
+            <section className="card">
+              <h2>Log a meal</h2>
+              <Button variant="primary" onClick={openQuickLog}>Enter food manually</Button>
+            </section>
           )}
 
-          {activeView === "diary" && (
-            <DiaryView
-              meals={meals}
-              goals={userProfile.goals}
-              onDeleteMeal={handleDeleteMeal}
-              onNavigate={handleNavigate}
-            />
+          {activeView === "diary" && authUser &&
+            <AccountDiary key={authUser.id} revision={mealRevision} selectedId={selectedMealId}
+              onSelect={setSelectedMealId} onWrite={refreshMeals} onNew={openQuickLog} onExpired={handleExpired} />}
+
+          {(activeView === "analyze" || activeView === "diary") && !authUser && (
+            <section className="card">
+              {checkingSession ? <p role="status">Checking your session…</p> : (
+                <>
+                  <h2>{activeView === "diary" ? "Food Diary" : "Analyze a meal"}</h2>
+                  <p>Sign in to log meals and view your saved entries.</p>
+                  <Button variant="primary" onClick={() => setIsAccountOpen(true)}>Sign in</Button>
+                </>
+              )}
+            </section>
           )}
 
           {activeView === "insights" && (
@@ -191,14 +219,14 @@ export function AppShell() {
             <AssistantView
               messages={chatMessages}
               onSendMessage={handleSendMessage}
-              onLogSuggestedMeal={handleAddMeal}
-              meals={meals}
+              onLogSuggestedMeal={openQuickLog}
+              meals={initialMeals}
               userProfile={userProfile}
             />
           )}
 
           {activeView === "recipes" && (
-            <RecipesView onLogMealFromRecipe={handleAddMeal} />
+            <RecipesView onLogMealFromRecipe={openQuickLog} />
           )}
 
           {activeView === "profile" && (
@@ -220,27 +248,18 @@ export function AppShell() {
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={handleNavigate}
-        onOpenQuickLog={() => setIsQuickLogOpen(true)}
-        onOpenBarcode={() => setIsBarcodeOpen(true)}
+        onOpenQuickLog={openQuickLog}
       />
 
-      <QuickLogModal
-        isOpen={isQuickLogOpen}
-        onClose={() => setIsQuickLogOpen(false)}
-        onSaveMeal={handleAddMeal}
-      />
-
-      <BarcodeScannerModal
-        isOpen={isBarcodeOpen}
-        onClose={() => setIsBarcodeOpen(false)}
-        onLogScannedFood={handleAddMeal}
-      />
+      {isAccountOpen && <AccountModal user={authUser} onSession={handleSession} onClose={() => setIsAccountOpen(false)} />}
+      {isQuickLogOpen && authUser && (
+        <QuickLogModal onClose={() => setIsQuickLogOpen(false)} onSaveMeal={handleSavedMeal} onExpired={handleExpired} />
+      )}
 
       <MealDetailModal
         meal={selectedMealForModal}
         isOpen={selectedMealForModal !== null}
         onClose={() => setSelectedMealForModal(null)}
-        onDeleteMeal={handleDeleteMeal}
       />
 
       <Toast

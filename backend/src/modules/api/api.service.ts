@@ -22,8 +22,10 @@ import {
   type NutritionRecordLike,
 } from "../nutrition/nutrition-record.js";
 import type { StorageService } from "../storage/storage.service.js";
+import type { MealVisionProvider } from "../../integrations/ai/openai-vision.js";
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
 import { activeFoodWhere } from "../foods/food.repository.js";
+import { portionEvidenceSchema } from "../meals/portion-estimation.js";
 import {
   rankFoods,
   searchTokens,
@@ -75,7 +77,18 @@ export interface MealDto {
   status: string;
   notes: string | null;
   confirmedAt: string | null;
-  items: Array<MealItemInput & { id: string; nutrition?: NutritionTotals }>;
+  items: Array<
+    MealItemInput & {
+      id: string;
+      nutrition?: NutritionTotals;
+      provenance?: {
+        source: string;
+        version: string;
+        servingAmount: number;
+        servingUnit: string;
+      };
+    }
+  >;
   totals: NutritionTotals;
   imageReference: string | null;
 }
@@ -86,6 +99,9 @@ export interface AnalysisDto {
   status: "PENDING" | "PROCESSING" | "READY" | "FAILED";
   inputType: string;
   inputReference: string | null;
+  provider?: string;
+  model?: string;
+  modelVersion?: string | null;
   predictions: Array<{
     id: string;
     predictedName: string;
@@ -93,6 +109,13 @@ export interface AnalysisDto {
     quantity: number | null;
     unit: string | null;
     confidence: number | null;
+    portionEstimate?: {
+      basis: "VISIBLE_MEASUREMENT" | "VISIBLE_SERVING_COUNT";
+      confidence: number;
+      source: string;
+      version: string;
+      servingReference?: { amount: number; unit: string };
+    } | null;
   }>;
   error?: { code: string; message: string };
 }
@@ -243,6 +266,10 @@ type MealItemLike = {
     carbohydrates: unknown;
     fat: unknown;
     fiber: unknown;
+    servingAmount?: unknown;
+    servingUnit?: string;
+    source?: { name: string };
+    nutritionVersion?: { version: string };
   } | null;
 };
 type MealLike = {
@@ -263,6 +290,7 @@ type PredictionLike = {
   estimatedQuantity: unknown;
   estimatedUnit: string | null;
   confidence: unknown;
+  modelMetadata?: unknown;
 };
 
 /** Deterministic service used when the app is booted without DATABASE_URL and in API contract tests. */
@@ -680,6 +708,7 @@ export class PrismaBusinessApiService implements BusinessApiService {
       prisma,
     ),
     private readonly storageService?: StorageService,
+    private readonly vision?: Pick<MealVisionProvider, "provider" | "model">,
   ) {}
 
   async searchFoods({
@@ -926,7 +955,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
     const meal = await this.prisma.meal.findFirst({
       where: { id, userId, deletedAt: null },
       include: {
-        items: { include: { food: true, nutritionSnapshot: true } },
+        items: {
+          include: {
+            nutritionSnapshot: {
+              include: {
+                source: { select: { name: true } },
+                nutritionVersion: { select: { version: true } },
+              },
+            },
+          },
+        },
         nutrition: true,
       },
     });
@@ -944,17 +982,29 @@ export class PrismaBusinessApiService implements BusinessApiService {
       mealType?: MealInput["mealType"];
     },
   ) {
-    const existing = await this.prisma.meal.findFirst({
-      where: { id, userId, deletedAt: null },
-      select: { id: true, status: true },
+    const where = { id, userId, deletedAt: null };
+    const changesDateOrType = Boolean(input.mealType || input.capturedAt);
+    const updated = await this.prisma.meal.updateMany({
+      where: {
+        ...where,
+        ...(changesDateOrType ? { status: { not: "CONFIRMED" } } : {}),
+      },
+      data: input,
     });
-    if (!existing) throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
-    if (existing.status === "CONFIRMED" && (input.mealType || input.capturedAt))
-      throw new AppError(
-        "INVALID_STATE",
-        "Confirmed meal nutrition cannot be changed",
-      );
-    await this.prisma.meal.update({ where: { id }, data: input });
+    if (!updated.count) {
+      if (
+        changesDateOrType &&
+        (await this.prisma.meal.findFirst({
+          where: { ...where, status: "CONFIRMED" },
+          select: { id: true },
+        }))
+      )
+        throw new AppError(
+          "INVALID_STATE",
+          "Confirmed meal date and type cannot be changed",
+        );
+      throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
+    }
     return this.getMeal(userId, id);
   }
 
@@ -977,14 +1027,8 @@ export class PrismaBusinessApiService implements BusinessApiService {
     userId: string,
     input: { mealId?: string; inputType: string; inputReference: string },
   ) {
-    if (input.inputType === "IMAGE") {
-      if (!this.storageService)
-        throw new AppError("STORAGE_ERROR", "Storage is not configured");
-      await this.storageService.getByReferenceForUser(
-        input.inputReference,
-        userId,
-      );
-    }
+    if (input.inputType === "IMAGE")
+      return this.createImageAnalysis(userId, input);
     let mealId = input.mealId;
     if (mealId) {
       const meal = await this.prisma.meal.findFirst({
@@ -992,11 +1036,6 @@ export class PrismaBusinessApiService implements BusinessApiService {
         select: { id: true },
       });
       if (!meal) throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
-      if (input.inputType === "IMAGE")
-        await this.prisma.meal.update({
-          where: { id: mealId },
-          data: { imageUrl: input.inputReference, status: "ANALYZING" },
-        });
     } else
       mealId = (
         await this.prisma.meal.create({
@@ -1005,7 +1044,6 @@ export class PrismaBusinessApiService implements BusinessApiService {
             mealType: "OTHER",
             capturedAt: new Date(),
             status: "ANALYZING",
-            imageUrl: input.inputReference,
           },
           select: { id: true },
         })
@@ -1020,15 +1058,97 @@ export class PrismaBusinessApiService implements BusinessApiService {
         inputReference: input.inputReference,
       },
     });
-    if (input.inputType === "IMAGE")
-      await this.storageService?.attachForUser(input.inputReference, userId);
+    return this.analysisDto(analysis, []);
+  }
+
+  private async createImageAnalysis(
+    userId: string,
+    input: { mealId?: string; inputReference: string },
+  ) {
+    if (!this.storageService)
+      throw new AppError("STORAGE_ERROR", "Storage is not configured");
+    const object = await this.storageService.getByReferenceForUser(
+      input.inputReference,
+      userId,
+    );
+    const vision = this.vision;
+    if (!vision)
+      throw new AppError(
+        "AI_ANALYSIS_ERROR",
+        "Photo analysis is unavailable. Enter the meal manually.",
+      );
+
+    const analysis = await this.prisma.$transaction(async (tx) => {
+      const attached = await tx.storedObject.updateMany({
+        where: {
+          id: object.id,
+          ownerId: userId,
+          status: "UPLOADED",
+          deletedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        data: { status: "ATTACHED", expiresAt: null },
+      });
+      if (!attached.count)
+        throw new AppError(
+          "STORAGE_INVALID_OBJECT",
+          "Upload a new photo for this analysis",
+        );
+
+      let mealId = input.mealId;
+      const data = {
+        status: "ANALYZING",
+        imageUrl: input.inputReference,
+      } as const;
+      if (mealId) {
+        const updated = await tx.meal.updateMany({
+          where: {
+            id: mealId,
+            userId,
+            deletedAt: null,
+            status: "DRAFT",
+            imageUrl: null,
+          },
+          data,
+        });
+        if (!updated.count) {
+          const owned = await tx.meal.findFirst({
+            where: { id: mealId, userId, deletedAt: null },
+            select: { id: true },
+          });
+          if (!owned)
+            throw new AppError("MEAL_NOT_FOUND", "Meal was not found");
+          throw new AppError(
+            "INVALID_STATE",
+            "Only an empty meal draft can receive a new photo",
+          );
+        }
+      } else {
+        const meal = await tx.meal.create({
+          data: { ...data, userId, mealType: "OTHER", capturedAt: new Date() },
+        });
+        mealId = meal.id;
+      }
+      return tx.aIAnalysis.create({
+        data: {
+          userId,
+          mealId,
+          provider: vision.provider,
+          model: vision.model,
+          inputType: "IMAGE",
+          inputReference: input.inputReference,
+        },
+      });
+    });
     return this.analysisDto(analysis, []);
   }
 
   async getAnalysis(userId: string, id: string) {
     const analysis = await this.prisma.aIAnalysis.findFirst({
-      where: { id, userId },
-      include: { predictions: true },
+      where: { id, userId, meal: { userId, deletedAt: null } },
+      include: {
+        predictions: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      },
     });
     if (!analysis)
       throw new AppError("ANALYSIS_NOT_FOUND", "Meal analysis was not found");
@@ -1324,6 +1444,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
             fiber: nullableNumber(item.nutritionSnapshot.fiber),
           }
         : undefined,
+      provenance:
+        item.nutritionSnapshot?.source &&
+        item.nutritionSnapshot.nutritionVersion
+          ? {
+              source: item.nutritionSnapshot.source.name,
+              version: item.nutritionSnapshot.nutritionVersion.version,
+              servingAmount: Number(item.nutritionSnapshot.servingAmount),
+              servingUnit: item.nutritionSnapshot.servingUnit ?? item.unit,
+            }
+          : undefined,
     }));
     return {
       id: meal.id,
@@ -1349,6 +1479,11 @@ export class PrismaBusinessApiService implements BusinessApiService {
       status: string;
       inputType: string;
       inputReference: string | null;
+      provider: string;
+      model: string;
+      modelVersion: string | null;
+      errorCode: string | null;
+      errorMessage: string | null;
     },
     predictions: readonly PredictionLike[],
   ): AnalysisDto {
@@ -1363,6 +1498,16 @@ export class PrismaBusinessApiService implements BusinessApiService {
             : (analysis.status as AnalysisDto["status"]),
       inputType: analysis.inputType,
       inputReference: analysis.inputReference ?? null,
+      provider: analysis.provider,
+      model: analysis.model,
+      modelVersion: analysis.modelVersion,
+      ...(analysis.status === "FAILED" &&
+      analysis.errorCode &&
+      analysis.errorMessage
+        ? {
+            error: { code: analysis.errorCode, message: analysis.errorMessage },
+          }
+        : {}),
       predictions: predictions.map((prediction) => ({
         id: prediction.id,
         predictedName: prediction.predictedName,
@@ -1374,6 +1519,10 @@ export class PrismaBusinessApiService implements BusinessApiService {
         unit: prediction.estimatedUnit,
         confidence:
           prediction.confidence === null ? null : Number(prediction.confidence),
+        portionEstimate:
+          portionEvidenceSchema.safeParse(
+            (prediction.modelMetadata as { portion?: unknown } | null)?.portion,
+          ).data ?? null,
       })),
     };
   }

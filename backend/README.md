@@ -57,7 +57,7 @@ for sources, usage conditions, nutrition references and conflict handling.
 | `STORAGE_LOCAL_ROOT`                                    | Private filesystem root used by the local provider.                                            |
 | `STORAGE_READ_URL_TTL_SECONDS`                          | Short-lived S3 read URL lifetime; local reads remain authenticated API requests.               |
 | `STORAGE_TEMPORARY_TTL_HOURS`, `STORAGE_RETENTION_DAYS` | Abandoned upload and soft-deleted meal retention windows.                                      |
-| `AI_PROVIDER`, `AI_API_KEY`                             | Future provider configuration. A key is required when a provider is selected.                  |
+| `AI_PROVIDER`, `AI_API_KEY`, `AI_VISION_MODEL`          | Photo recognition provider (`none` or `openai`), server API key, and vision model.             |
 | `NUTRITION_PROVIDER`, `NUTRITION_API_KEY`               | Future nutrition provider configuration.                                                       |
 | `LOG_LEVEL`                                             | Pino log level. Production logs are JSON.                                                      |
 | `AUTH_DEV_MODE`                                         | Development-only mock identity headers for foundation tests; keep `false` outside development. |
@@ -132,6 +132,28 @@ Successful business-style responses use `{ "success": true, "data": ... }`. Erro
 All errors include the correlation ID. `X-Request-ID` is accepted when it matches the safe ID format and is generated otherwise; the response and structured logs use the same ID. The foundation demo routes under `/api/v1/foundation` exist only to exercise validation, authentication, and authorization contracts and are not product APIs.
 
 OpenAPI is available at `/docs` and `/docs/json`.
+
+### Photo recognition setup and staging check
+
+Set `DATABASE_URL`, apply migrations, and set `AI_PROVIDER=openai`
+and `AI_API_KEY` in the server environment. The default vision model is
+`gpt-4.1-mini`. Set `AI_VISION_MODEL` to a model that supports image
+inputs and Structured Outputs if the deployment uses another model. The
+worker takes pending photo jobs from PostgreSQL and processes one at a
+time per backend process. It marks interrupted jobs failed after their
+processing window so the user can retry. `EXTERNAL_REQUEST_TIMEOUT_MS`
+bounds the provider call.
+
+OpenAI receives image bytes through the Responses API with `store: false`.
+Review your provider project's retention settings before enabling the
+feature. [OpenAI Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create) ·
+[OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data)
+
+On staging, sign in with a test account, upload a permitted photo with
+two clearly visible foods, and check that Analyze shows separate
+suggestions after processing. Check an unreadable or non-food photo for
+the no-result or retry path. Sign in with a second test account and
+verify the first account's storage reference and job ID are inaccessible.
 
 ## Architecture
 
