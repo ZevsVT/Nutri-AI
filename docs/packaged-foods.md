@@ -9,8 +9,8 @@ barcode manually if the device or browser cannot open the camera.
 
 ### Web scanner verification
 
-On the supported desktop and mobile browsers, sign in and open Barcode Scanner
-from the command palette. Compare a camera scan of a known EAN or UPC label with
+On the supported desktop and mobile browsers, sign in and select **Scan barcode**
+in the Food Diary. Compare a camera scan of a known EAN or UPC label with
 the same digits entered manually, including any leading zeros. For camera
 verification, also deny access and use manual entry, then close the scanner and
 check that the browser's camera indicator turns off. Test a valid unlisted code

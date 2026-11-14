@@ -88,6 +88,10 @@ export function AppShell() {
     if (authUser) setIsQuickLogOpen(true);
     else setIsAccountOpen(true);
   };
+  const openBarcode = () => {
+    if (authUser) setIsBarcodeOpen(true);
+    else setIsAccountOpen(true);
+  };
 
   const handleAddWater = (amount: number) => {
     setWaterMl((w) => Math.min(5000, w + amount));
@@ -200,7 +204,8 @@ export function AppShell() {
 
           {activeView === "diary" && authUser &&
             <AccountDiary key={authUser.id} revision={mealRevision} selectedId={selectedMealId}
-              onSelect={setSelectedMealId} onWrite={refreshMeals} onNew={openQuickLog} onExpired={handleExpired} />}
+              onSelect={setSelectedMealId} onWrite={refreshMeals} onNew={openQuickLog}
+              onOpenBarcode={openBarcode} onExpired={handleExpired} />}
 
           {(activeView === "analyze" || activeView === "diary") && !authUser && (
             <section className="card">
@@ -252,7 +257,7 @@ export function AppShell() {
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={handleNavigate}
         onOpenQuickLog={openQuickLog}
-        onOpenBarcode={() => authUser ? setIsBarcodeOpen(true) : setIsAccountOpen(true)}
+        onOpenBarcode={openBarcode}
       />
 
       {isAccountOpen && <AccountModal user={authUser} onSession={handleSession} onClose={() => setIsAccountOpen(false)} />}
