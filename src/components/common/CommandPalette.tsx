@@ -43,16 +43,14 @@ export function CommandPalette({
         if (onOpenQuickLog) onOpenQuickLog();
       },
     },
-    {
+    ...(onOpenBarcode ? [{
       id: "act-barcode",
       title: "Open Barcode Scanner",
       subtitle: "Scan packaged foods with instant nutrition lookup",
-      category: "Action",
-      icon: "scan",
-      action: () => {
-        if (onOpenBarcode) onOpenBarcode();
-      },
-    },
+      category: "Action" as const,
+      icon: "scan" as const,
+      action: onOpenBarcode,
+    }] : []),
     {
       id: "nav-dash",
       title: "Go to Dashboard",
@@ -64,7 +62,7 @@ export function CommandPalette({
     {
       id: "nav-analyze",
       title: "Analyze a Meal",
-      subtitle: "Capture photo or review AI recognition",
+      subtitle: "Open meal logging",
       category: "Navigation",
       icon: "scan",
       action: () => onNavigate("analyze"),

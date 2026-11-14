@@ -36,10 +36,10 @@ export function DashboardView({
     <div className="view-container">
       <div className="view-header">
         <div>
-          <p className="section-kicker">Personal Health Dashboard</p>
+          <p className="section-kicker">Sample dashboard</p>
           <h2>Good day, {userProfile.name}</h2>
           <p className="view-header-subtitle">
-            Here is your daily nutrition context and habits for today.
+            Open the Food Diary to see your saved meals.
           </p>
         </div>
       </div>
