@@ -210,6 +210,80 @@ test(
       assert.equal(meal.items[0]!.nutrition!.calories, 200);
       assert.equal(meal.items[0]!.nutrition!.fiber, null);
       assert.equal(meal.totals.fiber, null);
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/meals",
+        headers,
+        payload: {
+          name: "Manual diary fixture",
+          mealType: "LUNCH",
+          capturedAt: "2026-10-01T23:59:59.999Z",
+          items: [item],
+        },
+      });
+      assert.equal(created.statusCode, 201);
+      const manual = created.json().data;
+      assert.equal(manual.items[0].provenance.version, entry.source.version);
+      const day =
+        "/api/v1/meals?mealType=LUNCH&from=2026-10-01T00%3A00%3A00.000Z&to=2026-10-01T23%3A59%3A59.999Z";
+      assert.deepEqual(
+        (await app.inject({ url: day, headers }))
+          .json()
+          .data.map(({ id }: { id: string }) => id),
+        [manual.id],
+      );
+      const detailUrl = `/api/v1/meals/${manual.id}`;
+      const foreign = { "x-development-user-id": randomUUID() };
+      for (const method of ["GET", "PATCH", "DELETE"] as const) {
+        const payload =
+          method === "PATCH" ? { name: "Foreign change" } : undefined;
+        assert.equal(
+          (
+            await app.inject({
+              method,
+              url: detailUrl,
+              headers: foreign,
+              payload,
+            })
+          ).statusCode,
+          404,
+        );
+      }
+      assert.equal(
+        (
+          await app.inject({
+            method: "PATCH",
+            url: detailUrl,
+            headers,
+            payload: { mealType: "DINNER" },
+          })
+        ).statusCode,
+        409,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            method: "PATCH",
+            url: detailUrl,
+            headers,
+            payload: { name: "Updated", notes: "Diary note" },
+          })
+        ).statusCode,
+        200,
+      );
+      assert.equal(
+        (await app.inject({ url: detailUrl, headers })).json().data.name,
+        "Updated",
+      );
+      assert.equal(
+        (await app.inject({ method: "DELETE", url: detailUrl, headers }))
+          .statusCode,
+        204,
+      );
+      assert.deepEqual(
+        (await app.inject({ url: day, headers })).json().data,
+        [],
+      );
       const snapshot = await prisma.mealItemNutrition.findUniqueOrThrow({
         where: { mealItemId: meal.items[0]!.id },
       });
