@@ -58,6 +58,16 @@ request ID and server logs for diagnosis.
 | `GET /storage/objects/:id/url` | Required | Authenticated short-lived read URL or local API URL |
 | `DELETE /storage/objects/:id` | Required | Delete an unattached upload |
 
+## Meal diary
+
+The web diary uses authenticated `GET /api/v1/meals` with server-side
+pagination and optional meal type, status, and date filters. Its date picker
+uses the browser's local day and sends inclusive ISO `from` and `to`
+boundaries. After a save the diary can read the existing meal by its returned
+ID. `PATCH /api/v1/meals/:id` accepts name and notes, and accepts date or
+meal type while the meal is unconfirmed. `DELETE` soft-deletes the entry
+and applies private image retention when an image is attached.
+
 ## Confirmation semantics
 
 ### Photo recognition

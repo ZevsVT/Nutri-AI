@@ -8,7 +8,10 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app/app.js";
 import { loadConfig, type AppConfig } from "../src/config/env.js";
 import { createObjectKey } from "../src/common/uploads/file-policy.js";
-import { S3StorageProvider } from "../src/integrations/storage/storage-provider.js";
+import {
+  LocalStorageProvider,
+  S3StorageProvider,
+} from "../src/integrations/storage/storage-provider.js";
 import { OpenAiMealVision } from "../src/integrations/ai/openai-vision.js";
 import { PrismaBusinessApiService } from "../src/modules/api/api.service.js";
 import { ImageAnalysisWorker } from "../src/modules/meals/image-analysis.worker.js";
@@ -151,6 +154,178 @@ test("storage upload, read URLs, and analysis references are user-scoped", async
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test(
+  "deleting a confirmed meal removes its totals and retains its private image until expiry",
+  {
+    skip: !process.env.DATABASE_URL && "DATABASE_URL is not configured",
+  },
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "nutri-ai-retention-"));
+    const prisma = new PrismaClient();
+    const owner = randomUUID();
+    const other = randomUUID();
+    const sourceId = randomUUID();
+    const appConfig = config(root, {
+      LOG_LEVEL: "silent",
+      STORAGE_RETENTION_DAYS: "2",
+    });
+    const provider = new LocalStorageProvider(root);
+    const storage = new StorageService(
+      provider,
+      new PrismaStorageObjectRepository(prisma),
+      appConfig,
+    );
+    const meals = new PrismaBusinessApiService(prisma, undefined, storage);
+    const app = await buildApp({
+      config: appConfig,
+      businessApiService: meals,
+      storageService: storage,
+    });
+    try {
+      await prisma.user.createMany({
+        data: [owner, other].map((id) => ({ id, email: `${id}@test.local` })),
+      });
+      const stored = await storage.uploadImage(
+        {
+          bytes: image,
+          contentType: "image/png",
+          fileName: "meal.png",
+          ownerId: owner,
+        },
+        (id) => id,
+      );
+      const attached = await storage.attachForUser(stored.reference, owner);
+      const version = await prisma.nutritionVersion.create({
+        data: {
+          version: "fixture",
+          effectiveFrom: new Date("2026-01-01"),
+          source: {
+            create: {
+              id: sourceId,
+              name: sourceId,
+              provider: "test",
+              sourceType: "CURATED",
+            },
+          },
+        },
+      });
+      const date = "2026-08-22";
+      const meal = await prisma.meal.create({
+        data: {
+          userId: owner,
+          imageUrl: stored.reference,
+          mealType: "LUNCH",
+          capturedAt: new Date(`${date}T12:00:00Z`),
+          status: "CONFIRMED",
+          confirmedAt: new Date(),
+          items: {
+            create: {
+              displayName: "Fixture food",
+              quantity: 100,
+              unit: "g",
+              nutritionSnapshot: {
+                create: {
+                  nutritionVersionId: version.id,
+                  sourceId,
+                  servingAmount: 100,
+                  servingUnit: "g",
+                  calories: 125,
+                },
+              },
+            },
+          },
+        },
+      });
+      const mealUrl = `/api/v1/meals/${meal.id}`;
+      const imageUrl = `/api/v1/storage/objects/${stored.objectId}`;
+      const totals = (id: string) =>
+        app.inject({
+          url: `/api/v1/nutrition/daily?date=${date}`,
+          headers: user(id),
+        });
+      assert.equal((await totals(owner)).json().data.totals.calories, 125);
+      assert.equal((await totals(other)).json().data.mealCount, 0);
+      const listMeals = (id: string) =>
+        app.inject({ url: "/api/v1/meals", headers: user(id) });
+      assert.deepEqual((await listMeals(other)).json().data, []);
+      for (const method of ["GET", "PATCH", "DELETE"] as const) {
+        const response = await app.inject({
+          method,
+          url: mealUrl,
+          headers: user(other),
+          payload: method === "PATCH" ? { notes: "Other account" } : undefined,
+        });
+        assert.equal(response.statusCode, 404, response.body);
+      }
+      assert.equal(
+        (
+          await app.inject({
+            method: "DELETE",
+            url: mealUrl,
+            headers: user(owner),
+          })
+        ).statusCode,
+        204,
+      );
+      assert.equal(
+        (await app.inject({ url: mealUrl, headers: user(owner) })).statusCode,
+        404,
+      );
+      assert.deepEqual((await listMeals(owner)).json().data, []);
+      const afterDelete = (await totals(owner)).json().data;
+      assert.equal(afterDelete.mealCount, 0);
+      assert.equal(afterDelete.totals.calories, 0);
+
+      const retained = await prisma.storedObject.findUniqueOrThrow({
+        where: { id: stored.objectId },
+      });
+      assert.equal(retained.status, "RETAINED");
+      const deleted = await prisma.meal.findUniqueOrThrow({
+        where: { id: meal.id },
+      });
+      assert.ok(deleted.deletedAt && retained.expiresAt);
+      const retentionMs =
+        retained.expiresAt.getTime() - deleted.deletedAt.getTime();
+      const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+      assert.ok(retentionMs >= twoDaysMs && retentionMs < twoDaysMs + 60_000);
+      assert.equal(await storage.cleanupExpired(), 0);
+      assert.deepEqual(
+        (await app.inject({ url: imageUrl, headers: user(owner) })).rawPayload,
+        image,
+      );
+      assert.equal(
+        (await app.inject({ url: imageUrl, headers: user(other) })).statusCode,
+        404,
+      );
+
+      await prisma.storedObject.update({
+        where: { id: stored.objectId },
+        data: { expiresAt: new Date(0) },
+      });
+      assert.equal(await storage.cleanupExpired(), 1);
+      assert.equal(
+        (await app.inject({ url: imageUrl, headers: user(owner) })).statusCode,
+        404,
+      );
+      await assert.rejects(
+        provider.download({ key: attached.key, ownerId: owner }),
+      );
+      const purged = await prisma.storedObject.findUniqueOrThrow({
+        where: { id: stored.objectId },
+      });
+      assert.equal(purged.status, "DELETED");
+      assert.ok(purged.deletedAt);
+    } finally {
+      await app.close();
+      await prisma.user.deleteMany({ where: { id: { in: [owner, other] } } });
+      await prisma.nutritionVersion.deleteMany({ where: { sourceId } });
+      await prisma.foodSource.deleteMany({ where: { id: sourceId } });
+      await prisma.$disconnect();
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test("storage rejects spoofed MIME, malformed, unsupported, empty, and oversized images", async () => {
   const root = await mkdtemp(join(tmpdir(), "nutri-ai-storage-"));
@@ -483,7 +658,21 @@ test(
       ]);
       assert.equal(confirmed.statusCode, 200);
       assert.equal(duplicate.statusCode, 200);
-      assert.deepEqual(duplicate.json().data, confirmed.json().data);
+      const saved = confirmed.json().data;
+      assert.equal(saved.id, job.mealId);
+      assert.deepEqual(duplicate.json().data, saved);
+      const diary = await app.inject({
+        url: "/api/v1/meals?status=CONFIRMED",
+        headers: user(owner),
+      });
+      assert.equal(diary.statusCode, 200);
+      assert.deepEqual(diary.json().data, [saved]);
+      const detail = await app.inject({
+        url: `/api/v1/meals/${saved.id}`,
+        headers: user(owner),
+      });
+      assert.equal(detail.statusCode, 200);
+      assert.deepEqual(detail.json().data, saved);
       assert.equal(
         confirmed.json().data.items[0].provenance.version,
         "test-v1",

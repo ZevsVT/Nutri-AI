@@ -14,9 +14,10 @@ interface ApiEnvelope<T> {
   success: boolean;
   data: T;
   error?: { code?: string; message?: string };
+  meta?: { page: number; pageSize: number; total: number; totalPages: number };
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}) {
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T>> {
   const headers = new Headers(init.headers);
   if (typeof init.body === "string") headers.set("content-type", "application/json");
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
@@ -24,7 +25,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}) {
     headers,
     credentials: "include",
   });
-  if (response.status === 204) return { data: undefined as T };
+  if (response.status === 204) return { success: true, data: undefined as T };
   const payload: ApiEnvelope<T> | null = await response.json().catch(() => null);
   if (!response.ok || !payload?.success) {
     throw new ApiError(
