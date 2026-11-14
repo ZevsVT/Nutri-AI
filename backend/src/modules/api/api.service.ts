@@ -25,6 +25,7 @@ import type { StorageService } from "../storage/storage.service.js";
 import type { MealVisionProvider } from "../../integrations/ai/openai-vision.js";
 import { normalizeFoodText } from "../foods/food-taxonomy.js";
 import { activeFoodWhere } from "../foods/food.repository.js";
+import { portionEvidenceSchema } from "../meals/portion-estimation.js";
 import {
   rankFoods,
   searchTokens,
@@ -97,6 +98,13 @@ export interface AnalysisDto {
     quantity: number | null;
     unit: string | null;
     confidence: number | null;
+    portionEstimate?: {
+      basis: "VISIBLE_MEASUREMENT" | "VISIBLE_SERVING_COUNT";
+      confidence: number;
+      source: string;
+      version: string;
+      servingReference?: { amount: number; unit: string };
+    } | null;
   }>;
   error?: { code: string; message: string };
 }
@@ -267,6 +275,7 @@ type PredictionLike = {
   estimatedQuantity: unknown;
   estimatedUnit: string | null;
   confidence: unknown;
+  modelMetadata?: unknown;
 };
 
 /** Deterministic service used when the app is booted without DATABASE_URL and in API contract tests. */
@@ -1464,6 +1473,10 @@ export class PrismaBusinessApiService implements BusinessApiService {
         unit: prediction.estimatedUnit,
         confidence:
           prediction.confidence === null ? null : Number(prediction.confidence),
+        portionEstimate:
+          portionEvidenceSchema.safeParse(
+            (prediction.modelMetadata as { portion?: unknown } | null)?.portion,
+          ).data ?? null,
       })),
     };
   }

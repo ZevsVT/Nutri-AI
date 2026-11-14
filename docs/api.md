@@ -73,6 +73,18 @@ have `foodId: null`. A photo with no identifiable food is ready with an
 empty list. The provider, requested model, and returned model version
 are recorded with the analysis.
 
+Each candidate may include `quantity`, `unit`, and `portionEstimate`.
+The latter includes separate portion confidence, the evidence basis, and
+the nutrition source and version used to check the unit. For example, a
+visible 0.2 kg scale reading can be expressed as 200 g when the matched
+food has a mass reference. A 300 mL marking uses a volume reference.
+Counting two visible labeled servings uses a documented per-serving
+reference, such as 45 g per serving, to produce an estimated 90 g.
+The serving reference is included in the response for counted servings.
+Low-confidence, incompatible, and unmeasurable portions have null
+estimates. Users enter or edit the amount during review. The server uses
+the submitted amount and unit for confirmation.
+
 On failure, `GET /api/v1/meal-analysis/:id` returns `FAILED` with a
 sanitized `AI_ANALYSIS_ERROR` when a job could not finish. Users can
 retry by uploading the photo again, choose another photo, or enter food
