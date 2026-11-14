@@ -2,8 +2,22 @@
 
 Issue #17 adds a local, reviewed packaged-food catalog to the authenticated
 `POST /api/v1/barcode/scan` endpoint. No external credentials are required.
-The frontend `BarcodeScannerModal` still simulates scanning with a hardcoded
-product; camera decoding and frontend API integration remain separate work.
+The web scanner supports rear-camera decoding and manual entry. It sends only
+the decoded digits to the lookup API. Camera frames stay in the browser.
+Camera capture requires HTTPS or localhost and browser permission. Enter the
+barcode manually if the device or browser cannot open the camera.
+
+### Web scanner verification
+
+On the supported desktop and mobile browsers, sign in and select **Scan barcode**
+in the Food Diary. Compare a camera scan of a known EAN or UPC label with
+the same digits entered manually, including any leading zeros. For camera
+verification, also deny access and use manual entry, then close the scanner and
+check that the browser's camera indicator turns off. Test a valid unlisted code
+and a code with an invalid check digit. On a test catalog with sourced nutrition,
+enter a consumed quantity and confirm it. The diary should show that quantity
+and the same nutrition source/version. The bundled identity-only catalog can
+verify lookup but requires a separate sourced fixture to verify saving.
 
 ## Runtime and identity
 
@@ -261,7 +275,7 @@ controlled fixtures; source review is not repeated over the network in CI.
 - [x] Migrations work on clean and populated isolated PostgreSQL schemas.
 - [x] Automated tests cover validation, lookup, imports, nutrition and API behavior.
 - [x] Documentation describes the implemented behavior.
-- [x] Frontend camera scanning remains explicitly simulated.
+- [x] The packaged-food catalog shipped before camera decoding. The web scanner is tracked in [#23](https://github.com/ZevsVT/Nutri-AI/issues/23).
 - [x] Hosted CI passed for implementation commit `76b7b5d`:
       [GitHub Actions run 38592959307](https://github.com/ZevsVT/Nutri-AI/actions/runs/38592959307).
       Frontend and backend validation passed, including 64 tests with zero
