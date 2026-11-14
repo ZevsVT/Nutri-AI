@@ -10,8 +10,11 @@ provider keys stay server-side.
 Staging and production are separate GitHub Environments with separate
 `DATABASE_URL` and `DEPLOY_WEBHOOK_URL` secrets and `HEALTHCHECK_URL` variables.
 Both must use HTTPS, an independent PostgreSQL database, private S3-compatible
-storage, and `AUTH_DEV_MODE=false`. Configure the frontend's public API URL at
-the hosting platform; never put backend secrets in `VITE_*` variables.
+storage, and `AUTH_DEV_MODE=false`. The shared frontend artifact sends requests
+to `/api/v1` on its own origin. On each host, route that path to its own backend
+before handling frontend routes. For a separate frontend build that uses a
+different API origin, set `VITE_API_BASE_URL` when running `npm run build`.
+Backend secrets stay out of `VITE_*` variables.
 
 ## CI
 

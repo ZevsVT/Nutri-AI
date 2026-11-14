@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "./apiBaseUrl";
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -12,9 +14,6 @@ interface ApiResponse<T> {
   success: boolean;
   data: T;
 }
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
