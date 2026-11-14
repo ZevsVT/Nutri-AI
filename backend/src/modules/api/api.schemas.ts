@@ -77,6 +77,7 @@ export const createAnalysisSchema = z
   .strict();
 export const confirmAnalysisSchema = z
   .object({
+    reviewedPredictions: z.literal(true).optional(),
     items: z
       .array(itemSchema.extend({ predictionId: z.uuid().optional() }))
       .min(1)

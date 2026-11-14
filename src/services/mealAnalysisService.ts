@@ -69,6 +69,6 @@ export async function confirmMealAnalysis(
   items: Array<MealEntryInput & { predictionId?: string }>,
 ) {
   return (await apiRequest<SavedMeal>(`/meal-analysis/${analysisId}/confirm`, {
-    method: "POST", body: JSON.stringify({ items }),
+    method: "POST", body: JSON.stringify({ items, reviewedPredictions: true }),
   })).data;
 }
