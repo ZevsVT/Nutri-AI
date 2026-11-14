@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "./apiBaseUrl";
+
 export const operationTypes = [
   "CREATE_FOOD",
   "UPDATE_FOOD",
@@ -102,13 +104,12 @@ export class ReviewRequestError extends Error {
     super(message);
   }
 }
-const base = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 export async function reviewRequest<T>(
   path: string,
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const response = await fetch(`${base}/api/v1/admin${path}`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/admin${path}`, {
     method,
     credentials: "include",
     headers: {
