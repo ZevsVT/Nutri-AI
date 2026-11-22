@@ -1,176 +1,209 @@
-import { useState, useEffect } from "react";
-import { Icon } from "../../icons";
-import { Modal } from "./Modal";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError } from "../../services/apiClient";
+import { canLogProduct, saveScannedProduct, scanBarcode, type BarcodeProduct } from "../../services/barcodeService";
+import type { SavedMeal } from "../../services/mealService";
+import { NutritionSummary } from "./NutritionSummary";
 import { Button } from "./Button";
-import type { Meal } from "../../types";
+import { Modal } from "./Modal";
 
-interface BarcodeScannerModalProps {
-  isOpen: boolean;
+export function BarcodeScannerModal({ onClose, onSaveMeal, onManual, onExpired }: {
   onClose: () => void;
-  onLogScannedFood: (meal: Meal) => void;
-}
+  onSaveMeal: (meal: SavedMeal) => void;
+  onManual: () => void;
+  onExpired: () => void;
+}) {
+  const [barcode, setBarcode] = useState("");
+  const [product, setProduct] = useState<BarcodeProduct | null>(null);
+  const [quantity, setQuantity] = useState("");
+  const [unit, setUnit] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [looking, setLooking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const video = useRef<HTMLVideoElement>(null);
+  const pending = useRef<AbortController | null>(null);
 
-export function BarcodeScannerModal({
-  isOpen,
-  onClose,
-  onLogScannedFood,
-}: BarcodeScannerModalProps) {
-  const [scanState, setScanState] = useState<"scanning" | "recognized">("scanning");
+  useEffect(() => () => pending.current?.abort(), []);
+
+  const lookup = useCallback(async (code: string) => {
+    if (pending.current) return;
+    const controller = new AbortController();
+    pending.current = controller;
+    setBarcode(code);
+    setScanning(false);
+    setLooking(true);
+    setProduct(null);
+    setMessage("");
+    setError("");
+    try {
+      const result = await scanBarcode(code, controller.signal);
+      if (controller.signal.aborted) return;
+      if (!result.product) {
+        setMessage("No active product matches this barcode. Scan again or search the food catalog.");
+        return;
+      }
+      setProduct(result.product);
+      setQuantity("");
+      setUnit(result.product.nutrition?.servingUnit ?? "");
+    } catch (failure) {
+      if (controller.signal.aborted) return;
+      if (failure instanceof ApiError && failure.status === 401) onExpired();
+      else setError(failure instanceof Error ? failure.message : "Barcode lookup failed. Try again.");
+    } finally {
+      pending.current = null;
+      if (!controller.signal.aborted) setLooking(false);
+    }
+  }, [onExpired]);
 
   useEffect(() => {
-    if (isOpen) {
-      setScanState("scanning");
-      const timer = setTimeout(() => {
-        setScanState("recognized");
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
+    if (!scanning) return;
+    let stopped = false;
+    let stream: MediaStream | undefined;
+    let stopDecoder: (() => void) | undefined;
+    const preview = video.current;
+    const stopTracks = () => stream?.getTracks().forEach((track) => track.stop());
 
-  const handleConfirmLog = () => {
-    const scannedMeal: Meal = {
-      id: `barcode-${Date.now()}`,
-      type: "Snack",
-      name: "Organic Greek Yogurt & Wild Honey",
-      description: "Non-fat strained yogurt · organic raw honey · 170g tub",
-      time: "Just now",
-      date: "Today, Aug 22",
-      art: "meal-art--yogurt",
-      image: "/images/yogurt-berries.jpg",
-      calories: 140,
-      protein: 16,
-      carbs: 15,
-      fat: 0,
-      fiber: 0,
-      sodium: 60,
-      confidence: 1.0,
-      portion: "1 container (170g)",
-      tags: ["High Protein", "Barcode Verified"],
-      source: "GS1 Barcode / USDA FoodData Central",
+    async function start() {
+      if (!preview || !navigator.mediaDevices?.getUserMedia)
+        throw new Error("Camera access is unavailable here. Enter the barcode manually.");
+      const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([
+        import("@zxing/browser"), import("@zxing/library"),
+      ]);
+      if (stopped) return;
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false, video: { facingMode: { ideal: "environment" } },
+      });
+      if (stopped) {
+        stopTracks();
+        return;
+      }
+      const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.EAN_8, BarcodeFormat.EAN_13, BarcodeFormat.UPC_A, BarcodeFormat.ITF,
+      ]]]);
+      let decoded = false;
+      const controls = await new BrowserMultiFormatReader(hints).decodeFromStream(stream, preview, (result, _error, scanner) => {
+        if (stopped || decoded || !result) return;
+        decoded = true;
+        scanner.stop();
+        stopTracks();
+        void lookup(result.getText());
+      });
+      stopDecoder = () => controls.stop();
+      if (stopped) stopDecoder();
+    }
+
+    void start().catch((failure: unknown) => {
+      stopTracks();
+      if (stopped) return;
+      setScanning(false);
+      setError(failure instanceof DOMException
+        ? failure.name === "NotAllowedError"
+          ? "Camera access was denied. Enter the barcode manually or allow camera access."
+          : "Could not open a camera. Enter the barcode manually."
+        : failure instanceof Error ? failure.message : "Camera scanning failed. Enter the barcode manually.");
+    });
+
+    return () => {
+      stopped = true;
+      stopDecoder?.();
+      stopTracks();
+      if (preview) preview.srcObject = null;
     };
-    onLogScannedFood(scannedMeal);
-    onClose();
-  };
+  }, [scanning, lookup]);
+
+  async function save() {
+    if (!product || saving) return;
+    const amount = Number(quantity);
+    if (!Number.isFinite(amount) || amount < 0.001 || amount > 100_000 || !unit.trim()) {
+      setError("Enter a positive consumed quantity and its unit.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const meal = await saveScannedProduct(product, amount, unit.trim());
+      onSaveMeal(meal);
+      onClose();
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) onExpired();
+      else setError(failure instanceof Error ? failure.message : "Could not log the product.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const close = () => { if (!saving) onClose(); };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Barcode Scanner"
-      subtitle="Point your camera at any packaged food item to auto-fetch official nutrition facts."
-    >
-      {scanState === "scanning" ? (
-        <div
-          style={{
-            position: "relative",
-            height: "260px",
-            backgroundColor: "#121d17",
-            borderRadius: "var(--radius-lg)",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            marginBottom: "var(--space-4)",
-          }}
-        >
-          {/* Laser Scanner */}
-          <div className="scanner-laser-line" />
-
-          {/* Viewfinder Target */}
-          <div
-            style={{
-              width: "180px",
-              height: "120px",
-              border: "2px solid rgba(167, 243, 208, 0.8)",
-              borderRadius: "var(--radius-md)",
-              boxShadow: "0 0 0 1000px rgba(0, 0, 0, 0.4)",
-              position: "relative",
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            <div style={{ position: "absolute", top: "-10px", left: "-10px", width: "16px", height: "16px", borderTop: "3px solid #34d399", borderLeft: "3px solid #34d399" }} />
-            <div style={{ position: "absolute", top: "-10px", right: "-10px", width: "16px", height: "16px", borderTop: "3px solid #34d399", borderRight: "3px solid #34d399" }} />
-            <div style={{ position: "absolute", bottom: "-10px", left: "-10px", width: "16px", height: "16px", borderBottom: "3px solid #34d399", borderLeft: "3px solid #34d399" }} />
-            <div style={{ position: "absolute", bottom: "-10px", right: "-10px", width: "16px", height: "16px", borderBottom: "3px solid #34d399", borderRight: "3px solid #34d399" }} />
-            <span style={{ fontSize: "0.75rem", color: "rgba(255, 255, 255, 0.8)", letterSpacing: "0.05em" }}>
-              ALIGN BARCODE
-            </span>
-          </div>
-
-          <div
-            style={{
-              position: "absolute",
-              bottom: "12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "0.75rem",
-              color: "#a7f3d0",
-            }}
-          >
-            <Icon name="refresh" size={14} className="animate-spin" />
-            <span>Scanning for EAN/UPC barcode...</span>
-          </div>
-        </div>
-      ) : (
-        <div style={{ marginBottom: "var(--space-4)" }}>
-          <div
-            style={{
-              padding: "var(--space-4)",
-              backgroundColor: "var(--brand-primary-subtle)",
-              border: "1px solid var(--brand-primary-border)",
-              borderRadius: "var(--radius-lg)",
-              marginBottom: "var(--space-4)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-              <Icon name="check" size={16} style={{ color: "var(--brand-primary)" }} />
-              <strong style={{ color: "var(--brand-primary)", fontSize: "0.9375rem" }}>
-                Barcode 893500182931 Verified
-              </strong>
-            </div>
-            <h4 style={{ fontSize: "1.125rem", margin: "4px 0 2px" }}>
-              Organic Greek Yogurt & Wild Honey
-            </h4>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", margin: 0 }}>
-              Serving: 1 container (170g) · 140 kcal · 16g protein · 15g carbs · 0g fat
-            </p>
-          </div>
-
-          <div className="result-nutrition-grid" style={{ marginBottom: "var(--space-4)" }}>
-            <div className="result-nutrient-tile" style={{ backgroundColor: "var(--nutrient-calories-bg)" }}>
-              <span>Energy</span>
-              <strong>140 kcal</strong>
-            </div>
-            <div className="result-nutrient-tile" style={{ backgroundColor: "var(--nutrient-protein-bg)" }}>
-              <span>Protein</span>
-              <strong>16 g</strong>
-            </div>
-            <div className="result-nutrient-tile" style={{ backgroundColor: "var(--nutrient-carbs-bg)" }}>
-              <span>Carbs</span>
-              <strong>15 g</strong>
-            </div>
-            <div className="result-nutrient-tile" style={{ backgroundColor: "var(--nutrient-fat-bg)" }}>
-              <span>Fat</span>
-              <strong>0 g</strong>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-3)" }}>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        {scanState === "recognized" && (
-          <Button variant="primary" icon="plus" onClick={handleConfirmLog}>
-            Log Scanned Product
-          </Button>
+    <Modal isOpen onClose={close} title="Scan a packaged food" wide>
+      <fieldset disabled={saving} style={{ border: 0, padding: 0 }}>
+        {scanning ? (
+          <>
+            <video ref={video} autoPlay muted playsInline aria-label="Barcode camera preview" style={{ width: "100%" }} />
+            <Button onClick={() => setScanning(false)}>Stop camera</Button>
+          </>
+        ) : (
+          <Button icon="camera" disabled={looking} onClick={() => {
+            setError(""); setMessage(""); setProduct(null); setScanning(true);
+          }}>Start camera</Button>
         )}
-      </div>
+        <form onSubmit={(event) => { event.preventDefault(); void lookup(barcode.trim()); }}>
+          <label className="form-label">
+            Barcode digits
+            <input className="form-input" inputMode="numeric" autoComplete="off" value={barcode} maxLength={64} disabled={looking}
+              onChange={(event) => {
+                setBarcode(event.target.value);
+                setProduct(null);
+                setError("");
+                setMessage("");
+              }} />
+          </label>
+          <Button type="submit" loading={looking} disabled={!barcode.trim()}>Look up barcode</Button>
+        </form>
+        {looking && <p role="status">Looking up the product…</p>}
+        {message && <p role="status">{message}</p>}
+        {product && (
+          <section className="card">
+            <h4>{product.productName}</h4>
+            <p>{[product.brand, product.variant].filter(Boolean).join(" · ")}</p>
+            <dl>
+              <dt>Package size</dt>
+              <dd>{product.package.quantity !== null && product.package.unit
+                ? `${product.package.quantity} ${product.package.unit}${product.package.unitsPerPack > 1 ? ` across ${product.package.unitsPerPack} units` : ""}`
+                : "Unknown"}</dd>
+              <dt>Labeled serving</dt>
+              <dd>{product.labeledServing ? `${product.labeledServing.quantity} ${product.labeledServing.unit}` : "Unknown"}</dd>
+              <dt>Product identity source</dt>
+              <dd>{product.source.provider}{product.source.version && ` (${product.source.version})`}</dd>
+            </dl>
+            {product.nutrition && (
+              <>
+                <p>Nutrition per {product.nutrition.servingAmount} {product.nutrition.servingUnit} · {product.nutrition.source} ({product.nutrition.version})</p>
+                {product.nutritionAvailability === "PARTIAL" && <p>Some nutrient values are unavailable.</p>}
+                <NutritionSummary totals={product.nutrition} />
+              </>
+            )}
+            {canLogProduct(product) ? (
+              <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
+                <label className="form-label">
+                  Consumed quantity
+                  <input className="form-input" type="number" min="0.001" max="100000" step="0.001" value={quantity}
+                    onChange={(event) => setQuantity(event.target.value)} required />
+                </label>
+                <label className="form-label">
+                  Consumed unit
+                  <input className="form-input" value={unit} maxLength={32}
+                    onChange={(event) => setUnit(event.target.value)} required />
+                </label>
+                <Button type="submit" variant="primary" loading={saving}>Log this product</Button>
+              </form>
+            ) : <p>A usable nutrition reference is unavailable for this product. Search for a food you can log.</p>}
+          </section>
+        )}
+        {error && <p role="alert">{error}</p>}
+        <Button onClick={onManual}>Search foods manually</Button>
+      </fieldset>
     </Modal>
   );
 }

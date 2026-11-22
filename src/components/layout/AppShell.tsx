@@ -9,6 +9,7 @@ import { CommandPalette } from "../common/CommandPalette";
 import { Toast } from "../common/Toast";
 import { QuickLogModal } from "../common/QuickLogModal";
 import { AccountModal } from "../common/AccountModal";
+import { BarcodeScannerModal } from "../common/BarcodeScannerModal";
 import { DashboardView } from "../dashboard/DashboardView";
 import { AccountDiary } from "../diary/AccountDiary";
 import { InsightsView } from "../insights/InsightsView";
@@ -51,6 +52,7 @@ export function AppShell() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
+  const [isBarcodeOpen, setIsBarcodeOpen] = useState(false);
   const [selectedMealForModal, setSelectedMealForModal] = useState<Meal | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
@@ -69,6 +71,7 @@ export function AppShell() {
   const handleSession = useCallback((user: AuthUser | null) => {
     setAuthUser(user);
     setIsQuickLogOpen(false);
+    setIsBarcodeOpen(false);
     setSelectedMealId(null);
   }, []);
   const handleExpired = useCallback(() => {
@@ -83,6 +86,10 @@ export function AppShell() {
   };
   const openQuickLog = () => {
     if (authUser) setIsQuickLogOpen(true);
+    else setIsAccountOpen(true);
+  };
+  const openBarcode = () => {
+    if (authUser) setIsBarcodeOpen(true);
     else setIsAccountOpen(true);
   };
 
@@ -197,7 +204,8 @@ export function AppShell() {
 
           {activeView === "diary" && authUser &&
             <AccountDiary key={authUser.id} revision={mealRevision} selectedId={selectedMealId}
-              onSelect={setSelectedMealId} onWrite={refreshMeals} onNew={openQuickLog} onExpired={handleExpired} />}
+              onSelect={setSelectedMealId} onWrite={refreshMeals} onNew={openQuickLog}
+              onOpenBarcode={openBarcode} onExpired={handleExpired} />}
 
           {(activeView === "analyze" || activeView === "diary") && !authUser && (
             <section className="card">
@@ -249,11 +257,17 @@ export function AppShell() {
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={handleNavigate}
         onOpenQuickLog={openQuickLog}
+        onOpenBarcode={openBarcode}
       />
 
       {isAccountOpen && <AccountModal user={authUser} onSession={handleSession} onClose={() => setIsAccountOpen(false)} />}
       {isQuickLogOpen && authUser && (
         <QuickLogModal onClose={() => setIsQuickLogOpen(false)} onSaveMeal={handleSavedMeal} onExpired={handleExpired} />
+      )}
+
+      {isBarcodeOpen && authUser && (
+        <BarcodeScannerModal onClose={() => setIsBarcodeOpen(false)} onSaveMeal={handleSavedMeal}
+          onExpired={handleExpired} onManual={() => { setIsBarcodeOpen(false); openQuickLog(); }} />
       )}
 
       <MealDetailModal

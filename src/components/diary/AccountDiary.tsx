@@ -4,12 +4,13 @@ import { listMeals, mealTypes, readMeal, type SavedMeal } from "../../services/m
 import { Button } from "../common/Button";
 import { SavedMealDetail } from "./SavedMealDetail";
 
-export function AccountDiary({ revision, selectedId, onSelect, onWrite, onNew, onExpired }: {
+export function AccountDiary({ revision, selectedId, onSelect, onWrite, onNew, onOpenBarcode, onExpired }: {
   revision: number;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onWrite: () => void;
   onNew: () => void;
+  onOpenBarcode: () => void;
   onExpired: () => void;
 }) {
   const [page, setPage] = useState(1);
@@ -73,7 +74,10 @@ export function AccountDiary({ revision, selectedId, onSelect, onWrite, onNew, o
     <div className="view-container">
       <div className="view-header">
         <h2>Food Diary</h2>
-        <Button variant="primary" onClick={onNew}>Log a meal</Button>
+        <div className="dropzone-actions">
+          <Button icon="scan" onClick={onOpenBarcode}>Scan barcode</Button>
+          <Button variant="primary" onClick={onNew}>Log a meal</Button>
+        </div>
       </div>
       <section className="card">
         <div className="dropzone-actions">

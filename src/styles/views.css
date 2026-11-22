@@ -932,7 +932,9 @@
 
 /* Responsive View Adjustments */
 @media (max-width: 1024px) {
-  .dashboard-content-split,
+  .dashboard-content-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .capture-layout-grid,
   .review-layout-split,
   .diary-view-layout,

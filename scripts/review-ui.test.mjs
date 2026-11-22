@@ -4,6 +4,53 @@ import { createServer } from "vite";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+test("barcode lookup preserves digits and writes only a reviewed, sourced product", async () => {
+  const vite = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  const code = "036000291452";
+  const product = {
+    foodId: "product-id",
+    productName: "Test product",
+    nutritionAvailability: "PARTIAL",
+    nutrition: { preparation: "AS_SOLD", servingUnit: "g", servingAmount: 100, protein: null },
+  };
+  try {
+    const { scanBarcode, canLogProduct, saveScannedProduct } = await vite.ssrLoadModule("/src/services/barcodeService.ts");
+    globalThis.fetch = async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ url, body, credentials: init.credentials });
+      if (body.barcode === "invalid")
+        return Response.json({ success: false, error: { code: "VALIDATION_ERROR" } }, { status: 400 });
+      if (body.barcode === "00000000")
+        return Response.json({ success: true, data: { barcode: body.barcode, status: "UNRESOLVED", product: null } });
+      if (body.barcode)
+        return Response.json({ success: true, data: { barcode: body.barcode, status: "RESOLVED", product } });
+      return Response.json({ success: true, data: { id: "saved-meal" } });
+    };
+    const signal = new AbortController().signal;
+    await assert.rejects(scanBarcode("invalid", signal), /valid check digit/);
+    assert.equal((await scanBarcode("00000000", signal)).status, "UNRESOLVED");
+    const found = await scanBarcode(code, signal);
+    assert.equal(found.barcode, code);
+    assert.equal(found.product.nutrition.protein, null);
+    assert.equal(canLogProduct(found.product), true);
+    const unavailable = { ...product, nutritionAvailability: "UNAVAILABLE", nutrition: null };
+    assert.equal(canLogProduct(unavailable), false);
+    assert.throws(() => saveScannedProduct(unavailable, 75, "g"), /no usable nutrition reference/);
+    assert.equal(calls.length, 3);
+    assert.ok(calls.every(({ url }) => url.endsWith("/barcode/scan")));
+    assert.equal(calls[2].body.barcode, code);
+    assert.equal((await saveScannedProduct(found.product, 75, "g")).id, "saved-meal");
+    assert.ok(calls[3].url.endsWith("/meals"));
+    assert.deepEqual(calls[3].body.items, [{ foodId: "product-id", quantity: 75, unit: "g" }]);
+    assert.ok(calls.every(({ credentials }) => credentials === "include"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    await vite.close();
+  }
+});
+
 test("review frontend forms and session API client", async (context) => {
   const vite = await createServer({
     server: { middlewareMode: true },
