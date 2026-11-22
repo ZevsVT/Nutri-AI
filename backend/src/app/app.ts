@@ -65,6 +65,7 @@ export interface BuildAppOptions {
   storageObjectRepository?: StorageObjectRepository;
   storageService?: StorageService;
   reviewService?: ReviewService;
+  photoAnalysisAvailable?: boolean;
 }
 
 const requestIdPattern = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -344,6 +345,7 @@ export async function buildApp(
           name: { type: "string" },
           version: { type: "string" },
           status: { type: "string" },
+          photoAnalysisAvailable: { type: "boolean" },
         },
       },
     },
@@ -494,7 +496,11 @@ export async function buildApp(
   });
 
   installErrorHandling(app);
-  const systemService = new SystemService(config, readiness);
+  const systemService = new SystemService(
+    config,
+    readiness,
+    options.photoAnalysisAvailable ?? false,
+  );
   const apiController = new ApiController(
     options.businessApiService ??
       new InMemoryBusinessApiService(undefined, storageService),

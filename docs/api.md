@@ -72,6 +72,10 @@ and applies private image retention when an image is attached.
 
 ### Photo recognition
 
+The full `GET /api/v1` response includes `photoAnalysisAvailable`. Analyze
+offers photo capture and upload when the API has a vision provider and a
+database configured. Manual meal entry is available either way.
+
 Send a private JPEG, PNG, or WebP through `POST /api/v1/storage/uploads`,
 then post `{"inputType":"IMAGE","inputReference":"storage://object/{uuid}"}`
 to `POST /api/v1/meal-analysis`. Each uploaded object can be attached to

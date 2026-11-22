@@ -48,6 +48,7 @@ let app: FastifyInstance;
 try {
   app = await buildApp({
     config,
+    photoAnalysisAvailable: Boolean(vision && database),
     authRepository: database
       ? new PrismaAuthRepository(database.client)
       : undefined,

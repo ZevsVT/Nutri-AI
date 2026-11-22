@@ -7,6 +7,7 @@ import { ResultState } from "./ResultState";
 import {
   confirmMealAnalysis,
   discardMealAnalysis,
+  isPhotoAnalysisAvailable,
   pollMealAnalysis,
   startImageAnalysis,
   type MealAnalysis,
@@ -26,8 +27,17 @@ export function AnalyzeView({
   const [analysis, setAnalysis] = useState<MealAnalysis | null>(null);
   const [saved, setSaved] = useState<SavedMeal | null>(null);
   const [error, setError] = useState("");
+  const [photoAvailable, setPhotoAvailable] = useState(false);
   const active = useRef<AbortController | null>(null);
   const draftId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void isPhotoAnalysisAvailable(controller.signal).then((available) => {
+      if (!controller.signal.aborted) setPhotoAvailable(available);
+    }).catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (!file) {
@@ -104,9 +114,11 @@ export function AnalyzeView({
       <div className="view-header">
         <div>
           <h2>Analyze a meal</h2>
-          <p className="view-header-subtitle">
-            Take or upload a photo to get food suggestions you can check.
-          </p>
+          {photoAvailable && (
+            <p className="view-header-subtitle">
+              Take or upload a photo to get food suggestions you can check.
+            </p>
+          )}
         </div>
       </div>
       {busy ? (
@@ -119,7 +131,7 @@ export function AnalyzeView({
       ) : analysis ? (
         <ReviewState key={analysis.analysisId} predictions={analysis.predictions}
           onConfirm={confirm} onCancel={reset} />
-      ) : (
+      ) : photoAvailable ? (
         <>
           {error && (
             <div className="card">
@@ -132,6 +144,8 @@ export function AnalyzeView({
             onOpenManual={() => { reset(); onOpenManual(); }}
           />
         </>
+      ) : (
+        <Button variant="primary" onClick={onOpenManual}>Enter food manually</Button>
       )}
     </div>
   );

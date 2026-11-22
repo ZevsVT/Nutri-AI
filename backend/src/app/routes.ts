@@ -138,6 +138,7 @@ export async function registerRoutes(
                   name: "Nutri-AI API",
                   version: "v1",
                   status: "running",
+                  photoAnalysisAvailable: false,
                 },
               },
             ],

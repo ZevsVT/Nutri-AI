@@ -25,6 +25,11 @@ export interface MealAnalysis {
   error?: { code: string; message: string };
 }
 
+export async function isPhotoAnalysisAvailable(signal: AbortSignal) {
+  const { data } = await apiRequest<{ photoAnalysisAvailable?: boolean }>("", { signal });
+  return data.photoAnalysisAvailable === true;
+}
+
 export async function startImageAnalysis(file: File, signal: AbortSignal) {
   const body = new FormData();
   body.set("file", file);
