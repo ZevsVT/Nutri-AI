@@ -21,7 +21,8 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:import:packaged": "tsx src/modules/foods/packaged-food-import.cli.ts"
+    "db:import:packaged": "tsx src/modules/foods/packaged-food-import.cli.ts",
+    "feedback:report": "tsx src/modules/meals/correction-report.cli.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.1.0",

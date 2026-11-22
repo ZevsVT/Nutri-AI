@@ -4,8 +4,7 @@ import {
   visionResultSchema,
   type MealVisionProvider,
 } from "../../integrations/ai/openai-vision.js";
-import { activeFoodWhere } from "../foods/food.repository.js";
-import { normalizeFoodText } from "../foods/food-taxonomy.js";
+import { activeFoodWhere, FoodRepository } from "../foods/food.repository.js";
 import { latestNutrition } from "../nutrition/nutrition-record.js";
 import type { StorageService } from "../storage/storage.service.js";
 import { estimatePortion } from "./portion-estimation.js";
@@ -77,8 +76,9 @@ export class ImageAnalysisWorker {
       const image = await this.storage.readForUser(objectId, job.userId);
       const result = visionResultSchema.parse(await this.vision.analyze(image));
       const predictions: Prisma.AIFoodPredictionCreateManyInput[] = [];
+      const foods = new FoodRepository(this.prisma);
       for (const item of result.items) {
-        const foodId = await this.matchFood(item.label);
+        const foodId = await foods.matchCanonicalFood(item.label);
         const reference =
           item.portion && foodId
             ? await this.portionReference(foodId)
@@ -116,29 +116,6 @@ export class ImageAnalysisWorker {
       await this.fail(job.id, job.mealId);
     }
     return true;
-  }
-
-  private async matchFood(label: string) {
-    const normalized = normalizeFoodText(label);
-    if (!normalized) return null;
-    // Exact normalized catalog matches are safe to suggest. Fuzzy results
-    // remain available in the user's catalog search during review.
-    const matches = await this.prisma.food.findMany({
-      where: {
-        AND: activeFoodWhere,
-        OR: [
-          { normalizedName: normalized },
-          { nameVi: { equals: label, mode: "insensitive" } },
-          { nameEn: { equals: label, mode: "insensitive" } },
-          {
-            aliases: { some: { normalizedAlias: normalized, isActive: true } },
-          },
-        ],
-      },
-      select: { id: true },
-      take: 2,
-    });
-    return matches.length === 1 ? (matches[0]?.id ?? null) : null;
   }
 
   private async portionReference(foodId: string) {
