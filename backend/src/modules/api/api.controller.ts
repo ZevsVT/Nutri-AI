@@ -5,6 +5,7 @@ import type {
   CreateAnalysisBody,
   CreateMealBody,
   ConfirmAnalysisBody,
+  DeleteMealQuery,
   FoodSearchQuery,
   ListMealsQuery,
   UpdateMealBody,
@@ -102,10 +103,14 @@ export class ApiController {
       ),
     );
   deleteMeal = async (
-    request: Request<unknown, unknown, Params>,
+    request: Request<unknown, DeleteMealQuery, Params>,
     reply: FastifyReply,
   ) => {
-    await this.service.deleteMeal(request.user!.id, request.params.id);
+    await this.service.deleteMeal(
+      request.user!.id,
+      request.params.id,
+      request.query.draftOnly === "true",
+    );
     return reply.code(204).send();
   };
   createAnalysis = async (

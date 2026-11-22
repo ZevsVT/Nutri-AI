@@ -76,7 +76,15 @@ export const createAnalysisSchema = z
   })
   .strict();
 export const confirmAnalysisSchema = z
-  .object({ items: z.array(itemSchema).min(1).max(100) })
+  .object({
+    items: z
+      .array(itemSchema.extend({ predictionId: z.uuid().optional() }))
+      .min(1)
+      .max(100),
+  })
+  .strict();
+export const deleteMealSchema = z
+  .object({ draftOnly: z.literal("true").optional() })
   .strict();
 export const dailyNutritionSchema = z
   .object({ date: z.coerce.date() })
@@ -131,3 +139,4 @@ export type ListMealsQuery = z.infer<typeof listMealsSchema>;
 export type UpdateMealBody = z.infer<typeof updateMealSchema>;
 export type CreateAnalysisBody = z.infer<typeof createAnalysisSchema>;
 export type ConfirmAnalysisBody = z.infer<typeof confirmAnalysisSchema>;
+export type DeleteMealQuery = z.infer<typeof deleteMealSchema>;

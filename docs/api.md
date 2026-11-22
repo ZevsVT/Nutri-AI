@@ -72,6 +72,10 @@ and applies private image retention when an image is attached.
 
 ### Photo recognition
 
+The full `GET /api/v1` response includes `photoAnalysisAvailable`. Analyze
+offers photo capture and upload when the API has a vision provider and a
+database configured. Manual meal entry is available either way.
+
 Send a private JPEG, PNG, or WebP through `POST /api/v1/storage/uploads`,
 then post `{"inputType":"IMAGE","inputReference":"storage://object/{uuid}"}`
 to `POST /api/v1/meal-analysis`. Each uploaded object can be attached to
@@ -106,6 +110,14 @@ source/version, calculates portions, writes `MealItemNutrition` snapshots, and
 marks the meal confirmed in one transaction. Snapshots are write-once and all
 daily/weekly totals read those snapshots. Retrying a completed confirmation is
 safe and does not recalculate historical values.
+
+An item can include its original `predictionId` when the user keeps or edits
+a prediction. Each ID must belong to the owned analysis and appear only once.
+New items omit it and removed suggestions are absent from the final list.
+Confirmed meal details include snapshot source and version alongside the
+saved portion when provenance is available. The Analyze cancel action uses
+`DELETE /api/v1/meals/:id?draftOnly=true` so discarding a draft cannot delete
+a meal that has already been confirmed.
 
 Meal ownership is enforced in the service/repository boundary using the
 authenticated user ID. A missing owned resource is reported as a stable

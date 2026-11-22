@@ -2,21 +2,42 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../common/Button";
 import { CapturePanel } from "./CapturePanel";
 import { ProcessingState } from "./ProcessingState";
+import { ReviewState } from "./ReviewState";
+import { ResultState } from "./ResultState";
 import {
+  confirmMealAnalysis,
   discardMealAnalysis,
+  isPhotoAnalysisAvailable,
   pollMealAnalysis,
   startImageAnalysis,
   type MealAnalysis,
 } from "../../services/mealAnalysisService";
+import type { MealEntryInput, SavedMeal } from "../../services/mealService";
 
-export function AnalyzeView({ onOpenManual }: { onOpenManual: () => void }) {
+export function AnalyzeView({
+  onOpenManual,
+  onMealSaved,
+}: {
+  onOpenManual: () => void;
+  onMealSaved: (meal: SavedMeal) => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [analysis, setAnalysis] = useState<MealAnalysis | null>(null);
+  const [saved, setSaved] = useState<SavedMeal | null>(null);
   const [error, setError] = useState("");
+  const [photoAvailable, setPhotoAvailable] = useState(false);
   const active = useRef<AbortController | null>(null);
   const draftId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void isPhotoAnalysisAvailable(controller.signal).then((available) => {
+      if (!controller.signal.aborted) setPhotoAvailable(available);
+    }).catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (!file) {
@@ -47,6 +68,7 @@ export function AnalyzeView({ onOpenManual }: { onOpenManual: () => void }) {
     setBusy(true);
     setError("");
     setAnalysis(null);
+    setSaved(null);
     try {
       const job = await startImageAnalysis(photo, signal);
       if (controller.signal.aborted) {
@@ -74,8 +96,17 @@ export function AnalyzeView({ onOpenManual }: { onOpenManual: () => void }) {
     discardDraft();
     setFile(null);
     setAnalysis(null);
+    setSaved(null);
     setError("");
     setBusy(false);
+  }
+
+  async function confirm(items: Array<MealEntryInput & { predictionId?: string }>) {
+    if (!analysis) return;
+    const meal = await confirmMealAnalysis(analysis.analysisId, items);
+    draftId.current = null;
+    setSaved(meal);
+    onMealSaved(meal);
   }
 
   return (
@@ -83,9 +114,11 @@ export function AnalyzeView({ onOpenManual }: { onOpenManual: () => void }) {
       <div className="view-header">
         <div>
           <h2>Analyze a meal</h2>
-          <p className="view-header-subtitle">
-            Take or upload a photo to get food suggestions you can check.
-          </p>
+          {photoAvailable && (
+            <p className="view-header-subtitle">
+              Take or upload a photo to get food suggestions you can check.
+            </p>
+          )}
         </div>
       </div>
       {busy ? (
@@ -93,35 +126,12 @@ export function AnalyzeView({ onOpenManual }: { onOpenManual: () => void }) {
           <ProcessingState previewImage={preview} />
           <Button onClick={reset}>Cancel</Button>
         </>
+      ) : saved ? (
+        <ResultState meal={saved} onReset={reset} />
       ) : analysis ? (
-        <section className="card">
-          <h3>Food suggestions</h3>
-          {analysis.predictions.length ? (
-            <ul>
-              {analysis.predictions.map((item) => (
-                <li key={item.id}>
-                  {item.predictedName}
-                  {!item.foodId && " · needs a food match"}
-                  {item.confidence !== null && ` · ${Math.round(item.confidence * 100)}% model confidence`}
-                  {item.portionEstimate && item.quantity !== null && item.unit ? (
-                    <small>
-                      {" · "}Estimated {item.quantity} {item.unit} ({Math.round(item.portionEstimate.confidence * 100)}% portion confidence)
-                      {item.portionEstimate.servingReference
-                        ? ` · One serving is ${item.portionEstimate.servingReference.amount} ${item.portionEstimate.servingReference.unit}`
-                        : " · Visible measurement"}
-                      {` · ${item.portionEstimate.source} (${item.portionEstimate.version})`}
-                    </small>
-                  ) : " · Portion unknown"}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No foods could be identified. Try a clearer photo or enter your meal manually.</p>
-          )}
-          <Button onClick={reset}>Use a different photo</Button>
-          <Button onClick={() => { reset(); onOpenManual(); }}>Enter food manually</Button>
-        </section>
-      ) : (
+        <ReviewState key={analysis.analysisId} predictions={analysis.predictions}
+          onConfirm={confirm} onCancel={reset} />
+      ) : photoAvailable ? (
         <>
           {error && (
             <div className="card">
@@ -134,6 +144,8 @@ export function AnalyzeView({ onOpenManual }: { onOpenManual: () => void }) {
             onOpenManual={() => { reset(); onOpenManual(); }}
           />
         </>
+      ) : (
+        <Button variant="primary" onClick={onOpenManual}>Enter food manually</Button>
       )}
     </div>
   );

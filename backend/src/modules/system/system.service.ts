@@ -6,6 +6,7 @@ export class SystemService {
   constructor(
     private readonly config: AppConfig,
     private readonly readiness: ReadinessService,
+    private readonly photoAnalysisAvailable: boolean,
   ) {}
 
   getHealth() {
@@ -29,6 +30,7 @@ export class SystemService {
       name: "Nutri-AI API",
       version: "v1",
       status: "running" as const,
+      photoAnalysisAvailable: this.photoAnalysisAvailable,
     };
     return format === "compact"
       ? { name: data.name, version: data.version }
