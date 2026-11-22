@@ -110,16 +110,23 @@ const unitAliases: Record<string, string> = {
   grams: "g",
   milliliter: "ml",
   milliliters: "ml",
+  servings: "serving",
+  pieces: "piece",
   l: "ml",
   kg: "g",
 };
-function quantityInReferenceUnit(
+export function quantityInReferenceUnit(
   quantity: number,
   unit: string,
   referenceUnit: string,
 ) {
   const from = unit.trim().toLowerCase();
   const to = referenceUnit.trim().toLowerCase();
+  if (!Number.isFinite(quantity) || quantity <= 0)
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "Consumed quantity must be positive and finite",
+    );
   if ((unitAliases[from] ?? from) !== (unitAliases[to] ?? to))
     throw new AppError(
       "VALIDATION_ERROR",
@@ -144,11 +151,6 @@ export function scaledNutrition(
     throw new AppError(
       "NUTRITION_DATA_UNAVAILABLE",
       "Nutrition values are unavailable",
-    );
-  if (!Number.isFinite(quantity) || quantity <= 0)
-    throw new AppError(
-      "VALIDATION_ERROR",
-      "Consumed quantity must be positive and finite",
     );
   const requested = quantityInReferenceUnit(quantity, unit, record.servingUnit);
   validateNutrition(nutritionValues(record));

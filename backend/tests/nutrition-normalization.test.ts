@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { estimatePortion } from "../src/modules/meals/portion-estimation.js";
+import {
+  scaledNutrition,
+  type NutritionRecordLike,
+} from "../src/modules/nutrition/nutrition-record.js";
 import {
   convertUnit,
   energyToKcal,
@@ -95,5 +100,109 @@ test("invalid values and confidence are rejected", () => {
       sourceVersion: "v",
       confidence: 1.1,
     }),
+  );
+});
+
+const reference: NutritionRecordLike = {
+  nutritionVersionId: "reference-v1",
+  nutritionVersion: {
+    sourceId: "reference-source",
+    effectiveFrom: new Date(0),
+    effectiveTo: null,
+    version: "2026",
+    source: {
+      name: "Test food table",
+      provider: "test",
+      sourceUrl: null,
+      license: null,
+    },
+  },
+  servingAmount: 100,
+  servingUnit: "g",
+  referenceBasis: "PER_100_G",
+  preparation: "AS_SOLD",
+  mappingType: "EXACT_MATCH",
+  calories: 150,
+  protein: null,
+  carbohydrates: null,
+  fat: null,
+  fiber: null,
+  sugar: null,
+  sodium: null,
+};
+
+test("visible mass and volume measurements use only compatible source units", () => {
+  const estimate = { basis: "VISIBLE_MEASUREMENT", confidence: 0.85 } as const;
+  assert.deepEqual(
+    estimatePortion({ ...estimate, unit: "kg", amount: 0.2 }, reference),
+    {
+      quantity: 200,
+      unit: "g",
+      evidence: {
+        basis: "VISIBLE_MEASUREMENT",
+        confidence: 0.85,
+        source: "Test food table",
+        version: "2026",
+      },
+    },
+  );
+  assert.equal(
+    estimatePortion(
+      { ...estimate, unit: "l", amount: 0.3 },
+      { ...reference, servingUnit: "ml", referenceBasis: "PER_100_ML" },
+    )?.quantity,
+    300,
+  );
+  assert.equal(
+    estimatePortion({ ...estimate, unit: "ml", amount: 200 }, reference),
+    null,
+  );
+  assert.equal(
+    estimatePortion(
+      { ...estimate, confidence: 0.25, unit: "g", amount: 200 },
+      reference,
+    ),
+    null,
+  );
+  for (const amount of [0, -10, Infinity, NaN]) {
+    assert.equal(
+      estimatePortion({ ...estimate, unit: "g", amount }, reference),
+      null,
+    );
+    assert.throws(() => scaledNutrition(reference, amount, "grams"));
+  }
+  const final = scaledNutrition(reference, 150, "grams");
+  assert.equal(final.calories, 225);
+  assert.equal(final.protein, null);
+});
+
+test("counted servings require a documented serving reference", () => {
+  const serving = {
+    basis: "VISIBLE_SERVING_COUNT",
+    unit: "serving",
+    amount: 2,
+    confidence: 0.8,
+  } as const;
+  assert.equal(estimatePortion(serving, reference), null);
+  assert.equal(estimatePortion(serving, undefined), null);
+  const documented = {
+    ...reference,
+    referenceBasis: "PER_SERVING",
+    servingAmount: 45,
+  } as const;
+  const portion = estimatePortion(serving, documented);
+  assert.equal(portion?.quantity, 90);
+  assert.deepEqual(portion?.evidence.servingReference, {
+    amount: 45,
+    unit: "g",
+  });
+  assert.equal(estimatePortion({ ...serving, amount: 1.5 }, documented), null);
+  assert.equal(
+    scaledNutrition(
+      { ...documented, servingUnit: "serving", servingAmount: 1 },
+      2,
+      "servings",
+    ).calories,
+    300,
   );
 });
