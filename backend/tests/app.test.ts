@@ -39,7 +39,12 @@ test("health, readiness, and versioned metadata endpoints work", async () => {
     assert.equal(metadata.statusCode, 200);
     assert.deepEqual(metadata.json(), {
       success: true,
-      data: { name: "Nutri-AI API", version: "v1", status: "running" },
+      data: {
+        name: "Nutri-AI API",
+        version: "v1",
+        status: "running",
+        photoAnalysisAvailable: false,
+      },
     });
 
     const incomingRequestId = await app.inject({
@@ -58,6 +63,20 @@ test("health, readiness, and versioned metadata endpoints work", async () => {
       headers: { "x-request-id": "../../secret" },
     });
     assert.match(unsafeRequestId.headers["x-request-id"] as string, /^req_/);
+  } finally {
+    await close(app);
+  }
+});
+
+test("API metadata reports photo support when the application enables it", async () => {
+  const app = await buildApp({
+    config: testConfig(),
+    photoAnalysisAvailable: true,
+  });
+  try {
+    const response = await app.inject({ url: "/api/v1" });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().data.photoAnalysisAvailable, true);
   } finally {
     await close(app);
   }
